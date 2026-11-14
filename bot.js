@@ -6,7 +6,7 @@
   if (window.__roBot?.destroy) { try { window.__roBot.destroy(); } catch {} }
   const H = window.__roHook || (window.__roHook = { run: null, lobby: null, runs: 0, runSeq: 0, drops: 0, stuck: 0 });
   const BOT = (window.__roBot = {
-    version: '0.7.1',
+    version: '0.7.2',
     get run() { return H.run; },
     get lobby() { return H.lobby; },
     get runs() { return H.runs; }, set runs(v) { H.runs = v; },
@@ -81,7 +81,7 @@
     deityUse: { reroll_card: 4, reroll: 0, banish: 2, focus: 1 }, // 每場最多用在神祇
     deityRerollAll: false, // 三張都沒有神祇時也重抽全部
     perks: { deity: { reroll_card: 4, reroll: 0, banish: 2, focus: 1 }, chest: { reroll_card: 2, reroll: 1, banish: 2, focus: 0 }, skill: { reroll_card: 0, reroll: 0, banish: 1, focus: 1 }, huntAll: true },
-    gate: { on: false, deity: true, skillOn: false, skillTop: 1, skillLv: 1, skillNeed: 'any', need: 'any', after: 'idle' }, // 開局巡邏 → 掛機
+    gate: { on: false, deity: true, skillOn: false, skillTop: 1, skillLv: 1, after: 'idle' }, // 開局巡邏 → 掛機（勾的條件全部達成才切換）
     huntPhase: { on: false, allPerks: true, after: 'idle', leftover: 'skill', onFail: 'farm' }, // 開局獵神 → 掛機；onFail: farm 直接掛機 / leave 離開這場
     huntPoorSec: 60,       // 獵神時開不起寶箱超過 N 秒 → 視為失敗（0=不判斷）
     huntLeaveChests: 0,    // 開了 N 個寶箱還沒拿到目標 → 放棄這場（0=不離開）
@@ -215,7 +215,8 @@
   // hunt：還沒拿到目標神祇 → 強制遊走、撿所有錢、所有重抽只用在神祇
   // farm：拿到後 → 切換成設定的模式（預設原地掛機，原點＝切換當下位置），剩餘次數交給技能（或照原本上限 / 保留）
   const HP_ = () => cfg.huntPhase || {};
-  // 開局巡邏 → 掛機（cfg.gate）：條件 = 拿到🎯神祇 及/或 學到指定技能（可指定等級），任一 / 全部達成就切換
+  // 開局巡邏 → 掛機（cfg.gate）：條件 = 拿到🎯神祇（或放棄）＋ 學到指定技能（可指定等級），勾的全部達成才切換
+  // （v0.7.2 拿掉「任一」：學到技能就提早停止獵神，是兩次死亡的原因）
   const G = () => cfg.gate || {};
   const deityGoal = () => !!G().on && !!G().deity && cfg.deityOn && deityWant().length > 0;
   // 技能條件直接用「技能」分頁的優先序前 N 個（依目前職業），不用另外輸入
@@ -263,14 +264,14 @@
     const run = BOT.run; if (!run) return false;
     const conds = gateSkills().map((name) => ({ name: name.trim(), lv: Math.max(1, G().skillLv || 1) }));
     const ok = conds.map((c) => { const id = skillIdOf(c.name); return !!id && skillLv(run, id) >= c.lv; });
-    return G().skillNeed === 'all' ? ok.every(Boolean) : ok.some(Boolean);
+    return ok.every(Boolean);
   }
   function gateDone() {
     const goals = [];
     if (deityGoal()) goals.push(deityReached());
     if (skillGoal()) goals.push(skillsReached());
     if (!goals.length) return true;
-    return G().need === 'all' ? goals.every(Boolean) : goals.some(Boolean);
+    return goals.every(Boolean);
   }
   const phase = () => (G().on && (deityGoal() || skillGoal()) ? (gateDone() ? 'farm' : 'hunt') : 'normal');
   const huntingDeity = () => phase() === 'hunt' && deityGoal() && !deityReached();
@@ -1217,6 +1218,7 @@
   const SEC = (title, body, open) => `<details class="dt" data-dt="${title}"${open ? ' open' : ''}><summary>${title}</summary><div class="dtb">${body}</div></details>`;
   const NUM = (k, w = 44, min = 0, step = 1) => `<input type="number" data-k="${k}" min="${min}" step="${step}" style="width:${w}px">`;
   const CHK = (k, label, hint = '') => `<label><input type="checkbox" data-k="${k}">${label}${hint ? ` <span class="hint">${hint}</span>` : ''}</label>`;
+  const RADIO = (k, opts) => opts.map(([v, t]) => `<label><input type="radio" name="rb-${k}" data-k="${k}" value="${v}">${t}</label>`).join('');
   const SELECT = (k, opts) => `<select data-k="${k}">${opts.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select>`;
   const LIST = (k, ph, h = 46) => `<textarea data-list="${k}" style="height:${h}px" placeholder="${ph}"></textarea>`;
   const PERKS = [['reroll_card', '單張'], ['reroll', '全部'], ['banish', '放逐'], ['focus', '專注']];
@@ -1278,7 +1280,7 @@
   <button id="rb-reload" title="從硬碟重新載入 bot（不用刷新頁面）">⟳</button><button id="rb-min" title="收合">－</button></header>
 <div class="pf"><span>設定檔</span><select id="rb-prof"></select>
   <button id="rb-pnew" title="新增（預設值）">＋</button><button id="rb-pcopy" title="複製目前設定檔">⧉</button><button id="rb-pren" title="改名">✎</button><button id="rb-pdel" title="刪除">🗑</button></div>
-<nav>${[['main', '控制'], ['stage', '關卡'], ['skill', '技能'], ['chest', '寶箱'], ['deity', '神祇'], ['perk', '重抽'], ['log', '紀錄']].map(([k, t]) => `<button data-tab="${k}">${t}</button>`).join('')}</nav>
+<nav>${[['main', '控制'], ['stage', '關卡'], ['skill', '技能'], ['chest', '寶箱'], ['perk', '重抽'], ['log', '紀錄']].map(([k, t]) => `<button data-tab="${k}">${t}</button>`).join('')}</nav>
 <div class="body">
 
   <div class="pg" data-pg="main">
@@ -1288,26 +1290,25 @@
     ${CHK('autoResume', '自動繼續', '誤按暫停時')}
     <div class="box">
       <label class="h">玩法 <select id="rb-flow">
-        <option value="gate">先巡邏，達成條件後原地掛機</option>
+        <option value="gate">先巡邏，再原地掛機</option>
         <option value="idle">一開始就原地掛機</option>
         <option value="roam">一直遊走</option></select></label>
       <div data-show="gate.on" style="display:grid;gap:5px">
-        <div class="hint">巡邏＝遊走打怪撿東西。下列條件</div>
-        <label>${SELECT('gate.need', [['any', '任一'], ['all', '全部']])} 達成就切換原地掛機</label>
-        ${CHK('gate.skillOn', '學到技能優先序')}
-        <div data-show="gate.skillOn" style="display:grid;gap:4px;padding-left:18px">
-          <label>前 ${NUM('gate.skillTop', 38, 1)} 個的 ${SELECT('gate.skillNeed', [['any', '任一個'], ['all', '全部']])}</label>
-          <label>升到 Lv ${NUM('gate.skillLv', 38, 1)} 以上</label>
-          <div class="hint" id="rb-gskl"></div>
-        </div>
-        ${CHK('gate.deity', '拿到🎯神祇', '在神祇分頁選')}
+        <div class="hint">巡邏＝遊走打怪撿東西。下列勾的都做到，才切換原地掛機：</div>
+        ${CHK('gate.deity', '拿到🎯神祇', '在寶箱分頁選')}
         <div data-show="gate.deity" style="display:grid;gap:4px;padding-left:18px">
-          <div class="hint">獵神中：全力開寶箱、找精英怪。獵不到時：</div>
+          <div class="hint">獵神中：全力開寶箱、找精英怪。</div>
           <label>開了 ${NUM('huntLeaveChests', 40)} 個寶箱</label>
           <label>或打了 ${NUM('huntLeaveMin', 40)} 分鐘</label>
-          <label>或開不起寶箱 ${NUM('huntPoorSec', 40, 0, 10)} 秒</label>
-          <label>就 ${SELECT('huntPhase.onFail', [['farm', '直接原地掛機'], ['leave', '離開這場重來']])}</label>
+          <label>或錢不夠開寶箱 ${NUM('huntPoorSec', 40, 0, 10)} 秒</label>
+          <div>還沒拿到就：</div>
+          ${RADIO('huntPhase.onFail', [['leave', '離開這場重來'], ['farm', '放棄神祇，照常掛機']])}
           <div class="hint">數字填 0＝不看這個條件</div>
+        </div>
+        ${CHK('gate.skillOn', '學到技能優先序')}
+        <div data-show="gate.skillOn" style="display:grid;gap:4px;padding-left:18px">
+          <label>前 ${NUM('gate.skillTop', 38, 1)} 個都升到 Lv ${NUM('gate.skillLv', 38, 1)} 以上</label>
+          <div class="hint" id="rb-gskl"></div>
         </div>
       </div>
     </div>
@@ -1359,16 +1360,28 @@
   </div>
 
   <div class="pg" data-pg="chest">
-    <div class="h">寶箱優先序 <span class="hint">比對卡片文字</span></div>
-    ${LIST('chestPriority', '一行一個，越上面越優先&#10;例：&#10;詠唱速度&#10;傳說', 70)}
-    <label>品質低於 ${SELECT('chestMinQ', QUALITY.map((q) => [q, q]))} 就重抽</label>
-    ${CHK('chestAvoidSwap', '盡量不換掉身上的裝備')}
-    <div class="h">不要的 <span class="hint">出現就放逐</span></div>
-    ${LIST('chestBanish', '例：藥水')}
-    <div class="h">想要的 <span class="hint">出現就專注</span></div>
-    ${LIST('chestFocus', '例：記憶之神')}
-    <div class="box">
-      <label class="h">👥 組隊擲骰 ${SELECT('roll.mode', [['off', '自己按'], ['pass', '全部放棄'], ['greed', '全部 Greed'], ['need', '全部 Need'], ['rule', '依規則']])}</label>
+    <div class="hint">開寶箱時先看神祇，再看其他卡</div>
+    ${SEC('🎯 神祇', `
+      <div class="hint">🎯＝想要（最優先、出現就專注、沒出現就重抽神祇卡）　✕＝不要（出現就放逐、不選）</div>
+      <div style="display:grid;grid-template-columns:1fr auto;gap:2px 6px;align-items:center">
+        ${DEITY_NAMES.map((d) => `<span>${d}</span><span class="seg" data-d="${d}"><button data-v="">—</button><button data-v="want">🎯</button><button data-v="ban">✕</button></span>`).join('')}
+      </div>
+      <div class="h">其他想要的 <span class="hint">清單外，例：技能神祇</span></div>
+      ${LIST('deityExtra', '一行一個', 34)}
+      ${CHK('deityRerollAll', '三張都沒有神祇時也「重抽全部」')}
+    `, true)}
+    ${SEC('其他寶箱卡', `
+      <div class="h">優先序 <span class="hint">比對卡片文字</span></div>
+      ${LIST('chestPriority', '一行一個，越上面越優先&#10;例：&#10;詠唱速度&#10;傳說', 70)}
+      <label>品質低於 ${SELECT('chestMinQ', QUALITY.map((q) => [q, q]))} 就重抽</label>
+      ${CHK('chestAvoidSwap', '盡量不換掉身上的裝備')}
+      <div class="h">不要的 <span class="hint">出現就放逐</span></div>
+      ${LIST('chestBanish', '例：藥水')}
+      <div class="h">想要的 <span class="hint">出現就專注</span></div>
+      ${LIST('chestFocus', '例：詠唱速度')}
+    `, true)}
+    ${SEC('👥 組隊擲骰', `
+      <label>${SELECT('roll.mode', [['off', '自己按'], ['pass', '全部放棄'], ['greed', '全部 Greed'], ['need', '全部 Need'], ['rule', '依規則']])}</label>
       <div data-show="roll.mode=rule" style="display:grid;gap:4px">
         <label>品質 ≥ ${SELECT('roll.needQ', QUALITY.map((q) => [q, q]))} 就 Need</label>
         <label>卡片 ${SELECT('roll.card', [['rule', '照品質'], ['need', 'Need'], ['greed', 'Greed'], ['pass', '放棄']])}</label>
@@ -1376,17 +1389,7 @@
         <div class="hint">一定 Need（名稱）</div>${LIST('roll.needList', '例：Tidal Shoes', 34)}
         <div class="hint">一定放棄（名稱）</div>${LIST('roll.passList', '例：皮帽', 34)}
       </div>
-    </div>
-  </div>
-
-  <div class="pg" data-pg="deity">
-    <div class="hint">🎯＝想要（最優先、出現就專注、沒出現就重抽神祇卡）　✕＝不要（出現就放逐、不選）</div>
-    <div style="display:grid;grid-template-columns:1fr auto;gap:2px 6px;align-items:center">
-      ${DEITY_NAMES.map((d) => `<span>${d}</span><span class="seg" data-d="${d}"><button data-v="">—</button><button data-v="want">🎯</button><button data-v="ban">✕</button></span>`).join('')}
-    </div>
-    <div class="h">其他想要的 <span class="hint">清單外，例：技能神祇</span></div>
-    ${LIST('deityExtra', '一行一個', 34)}
-    ${CHK('deityRerollAll', '三張都沒有神祇時也「重抽全部」')}
+    `)}
   </div>
 
   <div class="pg" data-pg="perk">
@@ -1504,6 +1507,7 @@
       sel.innerHTML = names.map((n) => `<option>${n.replace(/</g, '&lt;')}</option>`).join('');
     }
     if (sel !== act) sel.value = STORE.activeProfile;
+    if (cfg.tab === 'deity') cfg.tab = 'chest'; // v0.7.2 神祇分頁併入寶箱
     panel.querySelectorAll('nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === cfg.tab));
     panel.querySelectorAll('.pg').forEach((p) => p.classList.toggle('on', p.dataset.pg === cfg.tab));
     if (cfg.tab === 'log' && (full || !BOT.logShown)) { renderLog(true); BOT.logShown = true; }
@@ -1512,7 +1516,7 @@
     panel.querySelectorAll('[data-k]').forEach((el) => {
       if (el === act) return;
       const v = getP(el.dataset.k);
-      if (el.type === 'checkbox') el.checked = !!v; else if (v !== undefined) el.value = v;
+      if (el.type === 'checkbox') el.checked = !!v; else if (el.type === 'radio') el.checked = el.value === v; else if (v !== undefined) el.value = v;
     });
     if (full) panel.querySelectorAll('[data-list]').forEach((el) => { if (el !== act) el.value = listVal(getP(el.dataset.list)); });
     panel.querySelectorAll('[data-show]').forEach((el) => { el.style.display = showOk(el.dataset.show) ? '' : 'none'; });

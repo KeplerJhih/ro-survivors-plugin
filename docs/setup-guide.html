@@ -139,6 +139,8 @@ code{background:var(--accent-soft);padding:1px 5px;border-radius:4px}
 .rp .cb{width:13px;height:13px;border:1px solid #8a97b3;border-radius:2px;background:#fff;display:inline-grid;place-items:center;flex:none;font-size:10px;line-height:1;color:#fff}
 .rp .cb.on{background:var(--p-blue);border-color:var(--p-blue)}
 .rp .cb.on::after{content:"✓"}
+.rp .rd{width:12px;height:12px;border:1px solid #8a97b3;border-radius:50%;background:#fff;display:inline-block;flex:none;box-sizing:border-box}
+.rp .rd.on{border:4px solid var(--p-blue)}
 .rp .dd{border:1px solid #9aa6c0;border-radius:3px;background:#fff;padding:0 4px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rp .dd.grow{flex:1}
 .rp .num{display:inline-block;min-width:30px;border:1px solid #9aa6c0;border-radius:3px;background:#fff;padding:0 4px;text-align:right;font-variant-numeric:tabular-nums}
@@ -230,7 +232,7 @@ dl.faq dd{margin:2px 0 0;color:var(--muted);font-size:14px}
 
 <div class="wrap">
   <header class="hero">
-    <div class="eyebrow">RO Survivors Bot · v0.7.1 · Chrome 擴充功能</div>
+    <div class="eyebrow">RO Survivors Bot · v0.7.2 · Chrome 擴充功能</div>
     <h1>從安裝到掛機，<em>14 步</em>設定好</h1>
     <p>右邊按「下一步」或「自動播放」，左邊的模擬畫面會示範要點哪裡、填什麼。左邊面板的分頁也可以自己點來看。</p>
     <div class="repo">下載位置 <span class="url">https://github.com/KeplerJhih/ro-survivors-plugin</span></div>
@@ -266,10 +268,10 @@ dl.faq dd{margin:2px 0 0;color:var(--muted);font-size:14px}
       <div class="tbl"><table class="rec">
         <thead><tr><th>位置</th><th>建議</th><th>原因</th></tr></thead>
         <tbody>
-          <tr><td>控制 › 玩法</td><td>先巡邏，達成條件後原地掛機</td><td>前期遊走拿技能和神祇，之後回原點穩定刷</td></tr>
-          <tr><td>控制 › 條件</td><td><span class="tag">全部</span>達成才切換</td><td>選「任一」時學到第一個技能就停止獵神，實測兩次因此沒拿到坦神祇被打死</td></tr>
-          <tr><td>控制 › 獵不到</td><td>開不起寶箱 60 秒 → 直接原地掛機</td><td>勾神祇條件時的預設值；0＝不看該條件</td></tr>
-          <tr><td>神祇</td><td>想要的按 🎯，例如堡壘之神</td><td>沒出現時會用單張重抽一直換神祇卡</td></tr>
+          <tr><td>控制 › 玩法</td><td>先巡邏，再原地掛機</td><td>前期遊走拿技能和神祇，之後回原點穩定刷</td></tr>
+          <tr><td>控制 › 條件</td><td>勾 <span class="tag">拿到🎯神祇</span> 和 <span class="tag">學到技能</span></td><td>勾的條件全部做到才切換；v0.7.1 的「任一」會提早停止獵神，已拿掉</td></tr>
+          <tr><td>控制 › 獵不到</td><td>開了 10 個寶箱 → 離開這場重來</td><td>一定要拿到神祇才玩就選重來；選「放棄神祇，照常掛機」則繼續這場。0＝不看該條件</td></tr>
+          <tr><td>寶箱 › 🎯 神祇</td><td>想要的按 🎯，例如堡壘之神</td><td>沒出現時會用單張重抽一直換神祇卡</td></tr>
           <tr><td>重抽</td><td>勾「獵神時全部先給神祇」</td><td>拿到神祇前，重抽次數不花在技能和寶箱</td></tr>
           <tr><td>寶箱</td><td>勾「盡量不換掉身上的裝備」</td><td>避免新卡把優先序內的裝備換掉</td></tr>
           <tr><td>長時間掛機</td><td>分頁不被釋放、保持清醒、自動回到遊戲</td><td>預設就是開的；再按一次「移到獨立視窗」</td></tr>
@@ -336,10 +338,10 @@ dl.faq dd{margin:2px 0 0;color:var(--muted);font-size:14px}
     <span class="hero-dot"></span>
 
     <div class="rp" id="rp">
-      <header><span>RO Bot</span><small>v0.7.1</small><span class="sp"></span><span class="hb" data-t="reload">⟳</span><span class="hb">－</span></header>
+      <header><span>RO Bot</span><small>v0.7.2</small><span class="sp"></span><span class="hb" data-t="reload">⟳</span><span class="hb">－</span></header>
       <div class="pf"><span>設定檔</span><span class="sel" id="profsel">預設</span><span class="b" data-t="pnew">＋</span><span class="b">⧉</span><span class="b">✎</span><span class="b">🗑</span></div>
       <nav>
-        <button type="button" data-tab="main">控制</button><button type="button" data-tab="stage">關卡</button><button type="button" data-tab="skill">技能</button><button type="button" data-tab="chest">寶箱</button><button type="button" data-tab="deity">神祇</button><button type="button" data-tab="perk">重抽</button><button type="button" data-tab="log">紀錄</button>
+        <button type="button" data-tab="main">控制</button><button type="button" data-tab="stage">關卡</button><button type="button" data-tab="skill">技能</button><button type="button" data-tab="chest">寶箱</button><button type="button" data-tab="perk">重抽</button><button type="button" data-tab="log">紀錄</button>
       </nav>
       <div class="body">
         <!-- 控制 -->
@@ -353,21 +355,21 @@ dl.faq dd{margin:2px 0 0;color:var(--muted);font-size:14px}
           <div class="box" data-t="flow">
             <div class="l h">玩法 <span class="dd grow" id="flow">一直遊走</span></div>
             <div id="gatebox" style="display:none;gap:5px">
-              <div class="hint">巡邏＝遊走打怪撿東西。下列條件</div>
-              <label><span class="dd" id="need">任一</span> 達成就切換原地掛機</label>
+              <div class="hint">巡邏＝遊走打怪撿東西。下列勾的都做到，才切換原地掛機：</div>
+              <label><span class="cb on" id="c-deity"></span>拿到🎯神祇 <span class="hint">在寶箱分頁選</span></label>
+              <div class="ind">
+                <div class="hint">獵神中：全力開寶箱、找精英怪。</div>
+                <label>開了 <span class="num" id="leaveN">0</span> 個寶箱</label>
+                <label>或打了 <span class="num">0</span> 分鐘</label>
+                <label>或錢不夠開寶箱 <span class="num">60</span> 秒</label>
+                <div>還沒拿到就：</div>
+                <label><span class="rd" id="r-leave"></span>離開這場重來</label>
+                <label><span class="rd on" id="r-farm"></span>放棄神祇，照常掛機</label>
+              </div>
               <label><span class="cb" id="c-skillOn"></span>學到技能優先序</label>
               <div class="ind" id="skillind" style="display:none">
-                <label>前 <span class="num">1</span> 個的 <span class="dd">任一個</span></label>
-                <label>升到 Lv <span class="num">1</span> 以上</label>
+                <label>前 <span class="num">1</span> 個都升到 Lv <span class="num">1</span> 以上</label>
                 <div class="hint">目前：神聖之光</div>
-              </div>
-              <label><span class="cb on" id="c-deity"></span>拿到🎯神祇 <span class="hint">在神祇分頁選</span></label>
-              <div class="ind">
-                <div class="hint">獵神中：全力開寶箱、找精英怪。獵不到時：</div>
-                <label>開了 <span class="num">0</span> 個寶箱</label>
-                <label>或打了 <span class="num">0</span> 分鐘</label>
-                <label>或開不起寶箱 <span class="num">60</span> 秒</label>
-                <label>就 <span class="dd">直接原地掛機</span></label>
               </div>
             </div>
           </div>
@@ -407,22 +409,30 @@ dl.faq dd{margin:2px 0 0;color:var(--muted);font-size:14px}
           <div class="h">核心技能 <span class="hint">出現就專注</span></div>
           <div class="ta" id="ta-foc" data-ph="例：神聖之光"></div>
         </div>
-        <!-- 寶箱 -->
+        <!-- 寶箱（v0.7.2 起神祇併入） -->
         <div class="pg" data-pg="chest">
-          <div class="h">寶箱優先序 <span class="hint">比對卡片文字</span></div>
-          <div class="ta tall" id="ta-chest" data-t="cpri" data-ph="一行一個，越上面越優先"></div>
-          <label data-t="minq">品質低於 <span class="dd" id="minq">史詩</span> 就重抽</label>
-          <label data-t="swap"><span class="cb on"></span>盡量不換掉身上的裝備</label>
-          <div class="h">不要的 <span class="hint">出現就放逐</span></div>
-          <div class="ta" data-ph="例：藥水"></div>
-          <div class="h">想要的 <span class="hint">出現就專注</span></div>
-          <div class="ta" data-ph="例：記憶之神"></div>
-          <div class="box"><label class="h">👥 組隊擲骰 <span class="dd">自己按</span></label></div>
-        </div>
-        <!-- 神祇 -->
-        <div class="pg" data-pg="deity">
-          <div class="hint">🎯＝想要　✕＝不要</div>
-          <div class="dg" id="dg"></div>
+          <div class="hint">開寶箱時先看神祇，再看其他卡</div>
+          <div class="det open">
+            <div class="sum">🎯 神祇</div>
+            <div class="dtb">
+              <div class="hint">🎯＝想要　✕＝不要</div>
+              <div class="dg" id="dg"></div>
+            </div>
+          </div>
+          <div class="det open">
+            <div class="sum">其他寶箱卡</div>
+            <div class="dtb">
+              <div class="h">優先序 <span class="hint">比對卡片文字</span></div>
+              <div class="ta tall" id="ta-chest" data-t="cpri" data-ph="一行一個，越上面越優先"></div>
+              <label data-t="minq">品質低於 <span class="dd" id="minq">史詩</span> 就重抽</label>
+              <label data-t="swap"><span class="cb on"></span>盡量不換掉身上的裝備</label>
+              <div class="h">不要的 <span class="hint">出現就放逐</span></div>
+              <div class="ta" data-ph="例：藥水"></div>
+              <div class="h">想要的 <span class="hint">出現就專注</span></div>
+              <div class="ta" data-ph="例：詠唱速度"></div>
+            </div>
+          </div>
+          <div class="det"><div class="sum">👥 組隊擲骰</div></div>
         </div>
         <!-- 重抽 -->
         <div class="pg" data-pg="perk">
@@ -506,22 +516,22 @@ dl.faq dd{margin:2px 0 0;color:var(--muted);font-size:14px}
       fx: (instant) => { typeInto($('#ta-pri'), '神聖之光\n治癒術', instant); $('#ta-ban').textContent = instant ? '緩速術' : ''; if (!instant && !reduce) later(() => typeInto($('#ta-ban'), '緩速術'), 1300); else $('#ta-ban').textContent = '緩速術'; },
       body: '<p>一行寫一個技能名稱，越上面越先選。</p><p><b>不要的技能</b>出現就放逐、絕不選；<b>核心技能</b>出現就專注，之後更常出現。</p>',
       note: '清單是依職業各存一份的，換職業會自動換成那個職業的清單。' },
-    { g: 2, scene: 'game', tab: 'deity', t: 'deity0', title: '指定想要的神祇',
+    { g: 2, scene: 'game', tab: 'chest', t: 'deity0', title: '指定想要的神祇',
       fx: () => setDeity('堡壘之神', 'want'),
-      body: '<p>在想要的神祇按 <b>🎯</b>（例如坦用的 <b>堡壘之神</b>），不想要的按 <b>✕</b>。</p><p>🎯 的神祇會最優先、出現就專注；開寶箱沒看到它時，會用單張重抽一直換神祇卡。</p>' },
+      body: '<p>在 <b>寶箱</b> 分頁最上面的 <b>🎯 神祇</b> 區塊，想要的神祇按 <b>🎯</b>（例如坦用的 <b>堡壘之神</b>），不想要的按 <b>✕</b>。</p><p>🎯 的神祇會最優先、出現就專注；開寶箱沒看到它時，會用單張重抽一直換神祇卡。</p>' },
     { g: 2, scene: 'game', tab: 'chest', t: 'cpri', title: '設定寶箱怎麼選',
       fx: (instant) => typeInto($('#ta-chest'), '詠唱速度\n傳說', instant),
-      body: '<p>寶箱優先序會比對卡片上的文字，名稱、品質、部位、數值都可以寫，越上面越優先。</p><p>品質低於設定值就重抽；建議保持勾選 <b>盡量不換掉身上的裝備</b>，避免把已經拿到的神祇換掉。</p>' },
+      body: '<p>同一頁的 <b>其他寶箱卡</b>：優先序會比對卡片上的文字，名稱、品質、部位、數值都可以寫，越上面越優先。</p><p>品質低於設定值就重抽；建議保持勾選 <b>盡量不換掉身上的裝備</b>，避免把已經拿到的神祇換掉。</p>' },
     { g: 2, scene: 'game', tab: 'perk', t: 'ptable', title: '分配重抽次數',
       body: '<p>遊戲每場的 單張重抽、全部重抽、放逐、專注 次數是共用的，這張表決定神祇、寶箱、技能各最多用幾次，0＝不用。</p><p>保持勾選 <b>獵神時全部先給神祇</b>：拿到神祇之前次數全留給神祇，拿到後才照表分配。</p>' },
     { g: 2, scene: 'game', tab: 'main', t: 'flow', title: '選玩法和巡邏條件',
       fx: (instant) => {
-        const a = () => { $('#flow').textContent = '先巡邏，達成條件後原地掛機'; $('#gatebox').style.display = 'grid'; };
-        const b = () => { $('#need').textContent = '全部'; check('c-skillOn'); $('#skillind').style.display = 'grid'; };
+        const a = () => { $('#flow').textContent = '先巡邏，再原地掛機'; $('#gatebox').style.display = 'grid'; };
+        const b = () => { $('#leaveN').textContent = '10'; check('r-leave'); check('r-farm', false); check('c-skillOn'); $('#skillind').style.display = 'grid'; };
         if (instant || reduce) { a(); b(); } else { later(a, 300); later(b, 1500); }
       },
-      body: '<p>玩法選 <b>先巡邏，達成條件後原地掛機</b>：開局到處打怪、找精英怪開寶箱，條件達成後回到安全的原點掛機。</p><p>條件勾 <b>學到技能優先序</b> 和 <b>拿到🎯神祇</b>，並選 <b>全部</b>。</p>',
-      note: '選「任一」時，只要學到第一個技能就會停止獵神。實測兩次都因此沒拿到堡壘之神，原地掛機 5–6 分鐘後被打死。' },
+      body: '<p>玩法選 <b>先巡邏，再原地掛機</b>：開局到處打怪、找精英怪開寶箱，勾的條件都做到後回到安全的原點掛機。</p><p>勾 <b>拿到🎯神祇</b>，設定獵不到的條件，例如 <b>開了 10 個寶箱</b>，再選 <b>離開這場重來</b> 或 <b>放棄神祇，照常掛機</b>。要練技能就再勾 <b>學到技能優先序</b>。</p>',
+      note: '一定要拿到神祇才玩，就選「離開這場重來」，並打開「自動進關」，沒抽到會自動開下一場。' },
     { g: 2, scene: 'game', tab: 'main', t: 'popout', title: '長時間掛機設定',
       pre: () => $('#det-long').classList.add('open'),
       body: '<p>展開 <b>長時間掛機</b>：分頁不被釋放、電腦保持清醒、重新整理後自動回到遊戲，預設都是開的。</p><p>再按 <b>把遊戲移到獨立視窗</b>。</p>',
