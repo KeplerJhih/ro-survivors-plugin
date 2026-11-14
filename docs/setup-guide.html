@@ -1,0 +1,630 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RO Bot 設定導覽</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: 左邊是會動的「模擬畫面」（GitHub → 擴充功能頁 → 遊戲＋面板），右邊是步驟說明；下方是推薦設定速查與常見問題 */
+:root{
+  --bg:#f3f5fa; --surface:#ffffff; --fg:#17203a; --muted:#5d6784; --line:#d8deec;
+  --accent:#3a68dc; --accent-soft:#e3eafc; --gold:#b97a06; --gold-soft:#fbf0d6; --danger:#c8423d;
+  --shadow:0 10px 30px rgba(23,32,58,.10);
+  --f-body:"Noto Sans TC",system-ui,-apple-system,"PingFang TC","Microsoft JhengHei",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  /* 遊戲面板與瀏覽器模擬：照實際外掛外觀，固定淺色 */
+  --p-bg:#ffffff; --p-fg:#1d2a44; --p-blue:#5b8def; --p-line:#d5def0; --p-soft:#eef2fa; --p-box:#f3f6fc; --p-hint:#778; --p-red:#d9534f;
+  --chrome:#e9ecf2; --chrome-fg:#3b4357;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0f1424; --surface:#171e33; --fg:#e6eaf5; --muted:#9aa4c2; --line:#2a3452;
+  --accent:#7aa0ff; --accent-soft:#1f2b4d; --gold:#f0b545; --gold-soft:#3a2f14; --danger:#ff7a72;
+  --shadow:0 10px 30px rgba(0,0,0,.45); --chrome:#232b42; --chrome-fg:#c9d0e4; color-scheme:dark } }
+:root[data-theme="dark"]{
+  --bg:#0f1424; --surface:#171e33; --fg:#e6eaf5; --muted:#9aa4c2; --line:#2a3452;
+  --accent:#7aa0ff; --accent-soft:#1f2b4d; --gold:#f0b545; --gold-soft:#3a2f14; --danger:#ff7a72;
+  --shadow:0 10px 30px rgba(0,0,0,.45); --chrome:#232b42; --chrome-fg:#c9d0e4; color-scheme:dark }
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.65;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 56px}
+.wrap{max-width:1160px;margin:0 auto;display:grid;gap:28px}
+h1,h2,h3{text-wrap:balance;margin:0;line-height:1.3}
+a{color:var(--accent)}
+code,.mono{font-family:var(--f-mono);font-size:.88em}
+code{background:var(--accent-soft);padding:1px 5px;border-radius:4px}
+
+/* hero */
+.hero{display:grid;gap:10px}
+.eyebrow{font-family:var(--f-mono);font-size:12px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase}
+.hero h1{font-size:clamp(26px,4vw,38px);font-weight:900;letter-spacing:.01em}
+.hero h1 em{font-style:normal;color:var(--accent)}
+.hero p{margin:0;color:var(--muted);max-width:62ch}
+.repo{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:13px;color:var(--muted)}
+.repo span.url{font-family:var(--f-mono);color:var(--fg);background:var(--surface);border:1px solid var(--line);padding:3px 8px;border-radius:6px;user-select:all;word-break:break-all}
+
+/* tour */
+.tour{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:20px;align-items:stretch}
+@media (max-width:920px){.tour{grid-template-columns:minmax(0,1fr)}}
+.browser{background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);overflow:hidden;min-width:0;display:flex;flex-direction:column}
+.browser .screen{flex:1}
+.bar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--chrome);color:var(--chrome-fg);font-size:12px}
+.dots{display:flex;gap:5px}.dots i{width:10px;height:10px;border-radius:50%;background:var(--line);display:block}
+.addr{flex:1;min-width:0;background:var(--surface);border-radius:999px;padding:3px 12px;font-family:var(--f-mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--fg)}
+.screen{position:relative;overflow:hidden;min-height:460px;display:flex;flex-direction:column}
+#scenes{flex:1;display:flex;flex-direction:column}
+.scene.on{flex:1}
+.scene:not(.on){display:none!important}
+.scene.on{animation:fade .35s}
+@keyframes fade{from{opacity:0}}
+
+/* scene: github */
+.gh{background:#fff;color:#1f2328;padding:28px;display:grid;gap:16px;align-content:start;font-size:14px}
+.gh .repo-h{display:flex;align-items:center;gap:8px;font-size:18px}
+.gh .repo-h b{color:#0969da}
+.gh .pill{border:1px solid #d1d9e0;border-radius:999px;font-size:12px;padding:0 8px;color:#59636e}
+.gh .row{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;position:relative}
+.gh .branch{border:1px solid #d1d9e0;border-radius:6px;padding:4px 10px;background:#f6f8fa}
+.gh .code-btn{background:#1f883d;color:#fff;border-radius:6px;padding:5px 14px;font-weight:600}
+.gh .dd{position:absolute;right:0;top:40px;width:260px;background:#fff;border:1px solid #d1d9e0;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.15);padding:10px;display:none;gap:8px;z-index:2}
+.gh .dd.open{display:grid}
+.gh .dd .clone{font-family:var(--f-mono);font-size:11px;border:1px solid #d1d9e0;border-radius:6px;padding:4px 6px;color:#59636e;word-break:break-all}
+.gh .dd .zip{padding:6px;border-radius:6px}
+.gh .files{border:1px solid #d1d9e0;border-radius:8px;overflow:hidden}
+.gh .files div{display:flex;gap:10px;padding:7px 12px;border-top:1px solid #d1d9e0;font-family:var(--f-mono);font-size:12.5px}
+.gh .files div:first-child{border-top:0;background:#f6f8fa;font-family:var(--f-body)}
+.gh .files em{font-style:normal;color:#59636e;margin-left:auto;font-family:var(--f-body)}
+
+/* scene: chrome://extensions */
+.ext{background:#f8f9fb;color:#202124;display:grid;align-content:start}
+.ext .eh{display:flex;align-items:center;gap:12px;padding:14px 20px;background:#fff;border-bottom:1px solid #dadce0}
+.ext .eh h3{font-size:18px;font-weight:500;flex:1}
+.tg{display:flex;align-items:center;gap:8px;font-size:13px}
+.sw{width:34px;height:14px;border-radius:7px;background:#bdc1c6;position:relative;transition:background .25s}
+.sw::after{content:"";position:absolute;left:-2px;top:-3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.4);transition:left .25s,background .25s}
+.sw.on{background:#a8c7fa}.sw.on::after{left:16px;background:#1a73e8}
+.ext .tools{display:none;gap:10px;padding:12px 20px;background:#fff;border-bottom:1px solid #dadce0;flex-wrap:wrap}
+.ext .tools.on{display:flex}
+.ext .tools span{border:1px solid #dadce0;border-radius:4px;padding:5px 12px;font-size:13px;color:#1a73e8;font-weight:500}
+.ext .cards{padding:20px;display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(240px,1fr))}
+.ext .card{background:#fff;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.2);padding:14px;display:grid;gap:6px;font-size:13px}
+.ext .card .t{display:flex;gap:10px;align-items:center;font-weight:500;font-size:14px}
+.ext .card .ico{width:30px;height:30px;border-radius:7px;background:var(--p-blue);color:#fff;display:grid;place-items:center;font-weight:700;font-size:12px}
+.ext .card small{color:#5f6368}
+.ext .card .ft{display:flex;justify-content:space-between;align-items:center;margin-top:6px;color:#1a73e8}
+.ext .card.ghost{opacity:.55}
+.ext .card.new{display:none}.ext .card.new.on{display:grid;animation:pop .45s ease-out}
+.picker{display:none;margin:0 20px;padding:12px;background:#fff;border:1px solid #dadce0;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);font-size:13px;gap:6px}
+.picker.on{display:grid;animation:pop .35s ease-out}
+.picker .fd{font-family:var(--f-mono);padding:4px 8px;border-radius:4px}
+.picker .fd.sel{background:#d3e3fd}
+@keyframes pop{from{transform:scale(.96);opacity:0}to{transform:none;opacity:1}}
+
+/* scene: game */
+.game{position:relative;background:
+  radial-gradient(circle at 70% 60%,rgba(255,230,150,.18),transparent 40%),
+  repeating-linear-gradient(45deg,rgba(0,0,0,.06) 0 12px,transparent 12px 24px),
+  linear-gradient(160deg,#3c5a3a,#24392a 60%,#1b2b22);overflow:hidden;padding-block:1px}
+.mob{position:absolute;width:16px;height:16px;border-radius:50%;background:#c7553f;box-shadow:0 0 0 3px rgba(0,0,0,.2);animation:drift 6s ease-in-out infinite alternate}
+.mob.e{width:24px;height:24px;background:#8f3fc7}
+.hero-dot{position:absolute;left:70%;top:58%;width:22px;height:22px;border-radius:50%;background:#f3d36b;box-shadow:0 0 0 4px rgba(243,211,107,.3),0 0 30px rgba(243,211,107,.6)}
+.gem{position:absolute;width:8px;height:8px;background:#5fb4ff;transform:rotate(45deg)}
+.chestbox{position:absolute;width:18px;height:14px;background:#d79a2b;border:2px solid #7a4d0c;border-radius:3px}
+@keyframes drift{to{transform:translate(-30px,18px)}}
+
+/* mock panel（照外掛實際樣式） */
+.rp{position:relative;margin:14px;width:258px;color:var(--p-fg);background:var(--p-bg);border:1px solid #9fb3d9;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.35);font:12px/1.45 var(--f-body);display:flex;flex-direction:column}
+.rp *{box-sizing:border-box}
+.rp header{padding:5px 8px;background:var(--p-blue);color:#fff;border-radius:7px 7px 0 0;display:flex;align-items:center;gap:6px;font-weight:600}
+.rp header .sp{flex:1}.rp header small{opacity:.8;font-weight:400}
+.rp header .hb{padding:0 5px;font-size:13px;border-radius:3px}
+.rp .pf{display:flex;align-items:center;gap:3px;padding:4px 6px;background:var(--p-soft);border-bottom:1px solid var(--p-line)}
+.rp .pf .sel{flex:1;min-width:0;border:1px solid #c5d2ea;background:#fff;border-radius:3px;padding:0 4px;font-weight:600;white-space:nowrap;overflow:hidden}
+.rp .pf .b{padding:0 4px;border:1px solid #c5d2ea;border-radius:3px;background:#fff;line-height:18px}
+.rp nav{display:flex;border-bottom:1px solid var(--p-line)}
+.rp nav button{all:unset;flex:1;text-align:center;padding:5px 0;cursor:pointer;color:#556}
+.rp nav button.on{color:#2b5fd9;font-weight:600;box-shadow:inset 0 -2px var(--p-blue)}
+.rp nav button:focus-visible{outline:2px solid var(--p-blue)}
+.rp .body{padding:6px 8px}
+.rp .pg{display:none;gap:6px}.rp .pg.on{display:grid}
+.rp label,.rp .l{display:flex;align-items:center;gap:5px;white-space:nowrap}
+.rp .hint{font-size:11px;color:var(--p-hint);white-space:normal}
+.rp .h{font-weight:600;color:#2b3f66}
+.rp .box{padding:6px;background:var(--p-box);border-radius:5px;display:grid;gap:5px}
+.rp .ind{display:grid;gap:4px;padding-left:18px}
+.rp .cb{width:13px;height:13px;border:1px solid #8a97b3;border-radius:2px;background:#fff;display:inline-grid;place-items:center;flex:none;font-size:10px;line-height:1;color:#fff}
+.rp .cb.on{background:var(--p-blue);border-color:var(--p-blue)}
+.rp .cb.on::after{content:"✓"}
+.rp .dd{border:1px solid #9aa6c0;border-radius:3px;background:#fff;padding:0 4px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rp .dd.grow{flex:1}
+.rp .num{display:inline-block;min-width:30px;border:1px solid #9aa6c0;border-radius:3px;background:#fff;padding:0 4px;text-align:right;font-variant-numeric:tabular-nums}
+.rp .ta{width:100%;min-height:40px;border:1px solid #9aa6c0;border-radius:3px;background:#fff;padding:2px 4px;white-space:pre-wrap;font:inherit;color:inherit;resize:none}
+.rp .ta.tall{min-height:58px}
+.rp .ta:empty::before{content:attr(data-ph);color:#aab}
+.rp .r{display:grid;grid-template-columns:56px 1fr 34px;align-items:center;gap:4px;font-variant-numeric:tabular-nums}
+.rp .rng{height:4px;background:#d5def0;border-radius:2px;position:relative}
+.rp .rng i{position:absolute;left:0;top:0;bottom:0;background:var(--p-blue);border-radius:2px}
+.rp .rng b{position:absolute;top:-4px;width:12px;height:12px;margin-left:-6px;border-radius:50%;background:var(--p-blue)}
+.rp .det{border:1px solid var(--p-line);border-radius:5px}
+.rp .det .sum{padding:4px 6px;font-weight:600;color:#2b3f66;background:var(--p-box);border-radius:5px}
+.rp .det .sum::before{content:"▸ "}.rp .det.open .sum::before{content:"▾ "}
+.rp .det .dtb{display:none;gap:5px;padding:6px}.rp .det.open .dtb{display:grid}
+.rp .btn{text-align:center;padding:3px 6px;border:1px solid #9fb3d9;border-radius:4px;background:#fff}
+.rp .seg{display:inline-flex;border:1px solid #9fb3d9;border-radius:4px;overflow:hidden}
+.rp .seg span{padding:0 5px;font-size:11px;line-height:18px;color:#667}
+.rp .seg span.on{background:var(--p-blue);color:#fff}
+.rp .seg span.ban.on{background:var(--p-red)}
+.rp .dg{display:grid;grid-template-columns:1fr auto;gap:2px 6px;align-items:center}
+.rp table{width:100%;border-collapse:collapse;font-size:12px}
+.rp th{font-weight:600;color:#556;font-size:11px;padding:2px;text-align:center}
+.rp td{padding:2px;text-align:center}.rp td:first-child{text-align:left;font-weight:600}
+.rp .st{font-size:11px;color:#445;background:var(--p-soft);padding:5px 8px;border-top:1px solid var(--p-line);border-radius:0 0 7px 7px;white-space:pre-line}
+.rp .stat{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;text-align:center}
+.rp .stat div{background:var(--p-box);border-radius:4px;padding:4px 0}
+.rp .stat b{display:block;font-size:15px}
+.rp .ex{font-size:10px;color:#b07a10;border:1px solid #e6c779;border-radius:3px;padding:0 4px;justify-self:start}
+
+/* 強調框＋游標 */
+.hl{position:relative;z-index:1;outline:2px solid #ffb21a;outline-offset:2px;border-radius:4px;animation:glow 1.4s ease-in-out infinite}
+@keyframes glow{50%{outline-color:rgba(255,178,26,.35);outline-offset:4px}}
+.cursor{position:absolute;left:0;top:0;width:22px;height:22px;pointer-events:none;z-index:5;transform:translate(60%,40%);transition:transform .7s cubic-bezier(.5,.05,.25,1);filter:drop-shadow(0 2px 2px rgba(0,0,0,.45))}
+.cursor .ring{position:absolute;left:-12px;top:-12px;width:24px;height:24px;border-radius:50%;border:2px solid #ffb21a;opacity:0}
+.cursor.click .ring{animation:ring .5s ease-out}
+@keyframes ring{from{opacity:1;transform:scale(.3)}to{opacity:0;transform:scale(1.6)}}
+
+/* guide side */
+.guide{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;display:grid;gap:12px;align-content:start;box-shadow:var(--shadow);min-width:0}
+.meta{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.phase{font-size:12px;font-weight:700;letter-spacing:.06em;padding:2px 10px;border-radius:999px;background:var(--accent-soft);color:var(--accent)}
+.phase.p2{background:var(--gold-soft);color:var(--gold)}
+.phase.p3{background:color-mix(in srgb,var(--danger) 14%,transparent);color:var(--danger)}
+.count{font-family:var(--f-mono);font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.guide h2{font-size:21px;font-weight:700}
+.sbody{display:grid;gap:8px;color:var(--fg);min-height:150px}
+.sbody p{margin:0}
+.note{font-size:13.5px;background:var(--gold-soft);color:var(--fg);border-left:3px solid var(--gold);padding:8px 10px;border-radius:0 6px 6px 0}
+.progress{height:4px;background:var(--line);border-radius:2px;overflow:hidden}
+.progress i{display:block;height:100%;width:0;background:var(--accent);transition:width .4s}
+.ctrls{display:grid;grid-template-columns:1fr 1.3fr 1fr;gap:8px}
+.ctrls button{font:inherit;font-size:14px;font-weight:600;border-radius:8px;padding:8px 6px;cursor:pointer;border:1px solid var(--line);background:var(--surface);color:var(--fg)}
+.ctrls button.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .ctrls button.pri{color:#0f1424} }
+:root[data-theme="dark"] .ctrls button.pri{color:#0f1424}
+.ctrls button:disabled{opacity:.4;cursor:default}
+.ctrls button:focus-visible,.steps button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.steps{list-style:none;margin:0;padding:10px 0 0;display:flex;flex-wrap:wrap;gap:6px;align-items:center;border-top:1px solid var(--line)}
+.steps button{all:unset;cursor:pointer;display:grid;place-items:center;width:34px;height:28px;border-radius:6px;border:1px solid var(--line);font-family:var(--f-mono);font-size:12px;font-variant-numeric:tabular-nums;color:var(--muted)}
+.steps button .t{display:none}
+.steps button[aria-current="step"]{background:var(--accent);border-color:var(--accent);color:var(--surface);font-weight:600}
+.steps .grp{font-size:11px;letter-spacing:.06em;color:var(--muted);font-weight:700;width:100%;margin-top:2px}
+.steps .grp:first-child{margin-top:0}
+.kbd{font-size:12px;color:var(--muted)}
+
+/* reference */
+.ref{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:920px){.ref{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;display:grid;gap:12px;min-width:0}
+.panel h3{font-size:18px}
+.tbl{overflow-x:auto}
+table.rec{width:100%;border-collapse:collapse;font-size:14px}
+table.rec th{text-align:left;font-size:12px;letter-spacing:.06em;color:var(--muted);font-weight:700;padding:6px 8px;border-bottom:1px solid var(--line)}
+table.rec td{padding:8px;border-bottom:1px solid var(--line);vertical-align:top}
+table.rec td:first-child{white-space:nowrap;font-weight:700}
+table.rec td:nth-child(3){color:var(--muted);font-size:13px}
+.tag{display:inline-block;font-size:12px;padding:0 6px;border-radius:4px;background:var(--accent-soft);color:var(--accent);margin:1px 2px 1px 0;white-space:nowrap}
+dl.faq{margin:0;display:grid;gap:12px}
+dl.faq dt{font-weight:700}
+dl.faq dd{margin:2px 0 0;color:var(--muted);font-size:14px}
+.warn{font-size:13.5px;border:1px solid color-mix(in srgb,var(--danger) 40%,transparent);background:color-mix(in srgb,var(--danger) 8%,transparent);border-radius:8px;padding:10px 12px}
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">RO Survivors Bot · v0.7.1 · Chrome 擴充功能</div>
+    <h1>從安裝到掛機，<em>14 步</em>設定好</h1>
+    <p>右邊按「下一步」或「自動播放」，左邊的模擬畫面會示範要點哪裡、填什麼。左邊面板的分頁也可以自己點來看。</p>
+    <div class="repo">下載位置 <span class="url">https://github.com/KeplerJhih/ro-survivors-plugin</span></div>
+  </header>
+
+  <main class="tour">
+    <div class="browser">
+      <div class="bar"><div class="dots"><i></i><i></i><i></i></div><div class="addr" id="addr">github.com/KeplerJhih/ro-survivors-plugin</div></div>
+      <div class="screen" id="stage">
+        <div id="scenes"></div>
+        <svg class="cursor" id="cur" viewBox="0 0 22 22" aria-hidden="true"><path d="M2 1 L2 18 L6.5 13.8 L9.6 20.5 L12.6 19.2 L9.6 12.6 L15.6 12.4 Z" fill="#fff" stroke="#111" stroke-width="1.3" stroke-linejoin="round"/></svg>
+      </div>
+    </div>
+
+    <aside class="guide" aria-live="polite">
+      <div class="meta"><span class="phase" id="phase">安裝</span><span class="count" id="count">01 / 14</span></div>
+      <div class="progress"><i id="prog"></i></div>
+      <h2 id="stitle"></h2>
+      <div class="sbody" id="sbody"></div>
+      <div class="ctrls">
+        <button type="button" id="prev">上一步</button>
+        <button type="button" id="play" class="pri">▶ 自動播放</button>
+        <button type="button" id="next">下一步</button>
+      </div>
+      <div class="kbd">鍵盤 ← → 也可以切換</div>
+      <ol class="steps" id="list"></ol>
+    </aside>
+  </main>
+
+  <section class="ref">
+    <div class="panel">
+      <h3>推薦設定速查</h3>
+      <div class="tbl"><table class="rec">
+        <thead><tr><th>位置</th><th>建議</th><th>原因</th></tr></thead>
+        <tbody>
+          <tr><td>控制 › 玩法</td><td>先巡邏，達成條件後原地掛機</td><td>前期遊走拿技能和神祇，之後回原點穩定刷</td></tr>
+          <tr><td>控制 › 條件</td><td><span class="tag">全部</span>達成才切換</td><td>選「任一」時學到第一個技能就停止獵神，實測兩次因此沒拿到坦神祇被打死</td></tr>
+          <tr><td>控制 › 獵不到</td><td>開不起寶箱 60 秒 → 直接原地掛機</td><td>勾神祇條件時的預設值；0＝不看該條件</td></tr>
+          <tr><td>神祇</td><td>想要的按 🎯，例如堡壘之神</td><td>沒出現時會用單張重抽一直換神祇卡</td></tr>
+          <tr><td>重抽</td><td>勾「獵神時全部先給神祇」</td><td>拿到神祇前，重抽次數不花在技能和寶箱</td></tr>
+          <tr><td>寶箱</td><td>勾「盡量不換掉身上的裝備」</td><td>避免新卡把優先序內的裝備換掉</td></tr>
+          <tr><td>長時間掛機</td><td>分頁不被釋放、保持清醒、自動回到遊戲</td><td>預設就是開的；再按一次「移到獨立視窗」</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+    <div class="panel">
+      <h3>常見問題</h3>
+      <dl class="faq">
+        <div><dt>角色不動、遊戲時間沒在走</dt><dd>遊戲分頁被切走、最小化或被其他視窗完全蓋住時，遊戲本身會停住。把遊戲移到獨立視窗，並讓它露出來。</dd></div>
+        <div><dt>沒看到面板，或底部不是 hook ✓✓</dt><dd>先確認 chrome://extensions 裡外掛是開著的，再重新整理遊戲頁面。</dd></div>
+        <div><dt>外掛有新版本</dt><dd>用新檔案覆蓋資料夾，按面板右上 ⟳ 即可，不用重新整理。若更新說明提到 hook.js 或權限，要到 chrome://extensions 按 ↻ 再重新整理。</dd></div>
+        <div><dt>想馬上停下來</dt><dd>按 F8，自動戰鬥、選卡、進關會一起關掉。</dd></div>
+      </dl>
+      <div class="warn">外掛只模擬按鍵、移動和點畫面，不會改遊戲數值。組隊擲骰會影響隊友的掉落，建議只用在自己的進度上。</div>
+    </div>
+  </section>
+</div>
+
+<template id="tpl">
+  <!-- GitHub -->
+  <div class="scene gh" data-scene="gh">
+    <div class="repo-h">📦 <span>KeplerJhih / <b>ro-survivors-plugin</b></span><span class="pill">Public</span></div>
+    <div class="row">
+      <span class="branch">⑂ main</span>
+      <span class="code-btn" data-t="code">&lt;&gt; Code ▾</span>
+      <div class="dd" id="ghdd">
+        <b>Clone</b>
+        <div class="clone">https://github.com/KeplerJhih/ro-survivors-plugin.git</div>
+        <div class="zip" data-t="zip">⬇ Download ZIP</div>
+      </div>
+    </div>
+    <div class="files">
+      <div><b>KeplerJhih</b> init: ro-survivors bot v0.7.1<em>1 commit</em></div>
+      <div>📁 tests</div><div>📄 manifest.json</div><div>📄 bot.js</div><div>📄 hook.js</div><div>📄 bridge.js</div><div>📄 bg.js</div><div>📄 NOTES.md</div>
+    </div>
+  </div>
+
+  <!-- chrome://extensions -->
+  <div class="scene ext" data-scene="ext">
+    <div class="eh"><h3>擴充功能</h3><div class="tg" data-t="dev">開發人員模式 <span class="sw" id="devsw"></span></div></div>
+    <div class="tools" id="tools"><span data-t="load">載入未封裝項目</span><span>封裝擴充功能</span><span>更新</span></div>
+    <div class="picker" id="picker">
+      <b>選取資料夾</b>
+      <div class="fd">📁 下載項目</div>
+      <div class="fd sel">📁 ro-survivors-plugin-main <span style="color:#5f6368">（裡面直接有 manifest.json）</span></div>
+    </div>
+    <div class="cards">
+      <div class="card new" id="newcard" data-t="card">
+        <div class="t"><span class="ico">RO</span><span>RO Survivors Bot</span></div>
+        <small>0.7.1 · RO Survivors 自動遊玩：自動戰鬥、原地掛機、選技能、寶箱策略、循環關卡</small>
+        <div class="ft"><span>詳細資料　移除</span><span class="sw on"></span></div>
+      </div>
+      <div class="card ghost"><div class="t"><span class="ico" style="background:#9aa0a6">A</span><span>其他擴充功能</span></div><small>1.0.0</small></div>
+    </div>
+  </div>
+
+  <!-- game + panel -->
+  <div class="scene game" data-scene="game">
+    <span class="mob" style="left:62%;top:30%"></span><span class="mob" style="left:82%;top:40%;animation-delay:-2s"></span>
+    <span class="mob e" style="left:86%;top:76%;animation-delay:-4s"></span><span class="mob" style="left:58%;top:82%;animation-delay:-1s"></span>
+    <span class="gem" style="left:76%;top:50%"></span><span class="gem" style="left:66%;top:70%"></span><span class="gem" style="left:90%;top:62%"></span>
+    <span class="chestbox" style="left:78%;top:22%"></span>
+    <span class="hero-dot"></span>
+
+    <div class="rp" id="rp">
+      <header><span>RO Bot</span><small>v0.7.1</small><span class="sp"></span><span class="hb" data-t="reload">⟳</span><span class="hb">－</span></header>
+      <div class="pf"><span>設定檔</span><span class="sel" id="profsel">預設</span><span class="b" data-t="pnew">＋</span><span class="b">⧉</span><span class="b">✎</span><span class="b">🗑</span></div>
+      <nav>
+        <button type="button" data-tab="main">控制</button><button type="button" data-tab="stage">關卡</button><button type="button" data-tab="skill">技能</button><button type="button" data-tab="chest">寶箱</button><button type="button" data-tab="deity">神祇</button><button type="button" data-tab="perk">重抽</button><button type="button" data-tab="log">紀錄</button>
+      </nav>
+      <div class="body">
+        <!-- 控制 -->
+        <div class="pg" data-pg="main">
+          <div class="sw3" data-t="switches" style="display:grid;gap:4px">
+            <label><span class="cb" id="c-fight"></span>自動戰鬥 <span class="hint">移動・閃怪・撿東西</span></label>
+            <label><span class="cb" id="c-pick"></span>自動選卡 <span class="hint">技能・寶箱・擲骰</span></label>
+            <label><span class="cb" id="c-loop"></span>自動進關 <span class="hint">隊長→關卡→結算回城</span></label>
+            <label><span class="cb on"></span>自動繼續 <span class="hint">誤按暫停時</span></label>
+          </div>
+          <div class="box" data-t="flow">
+            <div class="l h">玩法 <span class="dd grow" id="flow">一直遊走</span></div>
+            <div id="gatebox" style="display:none;gap:5px">
+              <div class="hint">巡邏＝遊走打怪撿東西。下列條件</div>
+              <label><span class="dd" id="need">任一</span> 達成就切換原地掛機</label>
+              <label><span class="cb" id="c-skillOn"></span>學到技能優先序</label>
+              <div class="ind" id="skillind" style="display:none">
+                <label>前 <span class="num">1</span> 個的 <span class="dd">任一個</span></label>
+                <label>升到 Lv <span class="num">1</span> 以上</label>
+                <div class="hint">目前：神聖之光</div>
+              </div>
+              <label><span class="cb on" id="c-deity"></span>拿到🎯神祇 <span class="hint">在神祇分頁選</span></label>
+              <div class="ind">
+                <div class="hint">獵神中：全力開寶箱、找精英怪。獵不到時：</div>
+                <label>開了 <span class="num">0</span> 個寶箱</label>
+                <label>或打了 <span class="num">0</span> 分鐘</label>
+                <label>或開不起寶箱 <span class="num">60</span> 秒</label>
+                <label>就 <span class="dd">直接原地掛機</span></label>
+              </div>
+            </div>
+          </div>
+          <div class="det" id="det-long" data-t="long">
+            <div class="sum">長時間掛機</div>
+            <div class="dtb">
+              <label><span class="cb on"></span>分頁不被 Chrome 釋放</label>
+              <label><span class="cb on"></span>掛機時電腦保持清醒</label>
+              <label><span class="cb"></span>被最小化時自動還原視窗</label>
+              <label><span class="cb on"></span>重新整理後自動回到遊戲</label>
+              <span class="btn" data-t="popout">把遊戲移到獨立視窗</span>
+            </div>
+          </div>
+          <div class="det"><div class="sum">原地掛機細節</div></div>
+          <div class="det"><div class="sum">遊走細節</div></div>
+          <div class="hint">F8：全部停止</div>
+        </div>
+        <!-- 關卡 -->
+        <div class="pg" data-pg="stage">
+          <label data-t="stagesel">關卡 <span class="dd grow" id="stagesel">柏伊亞嵐島</span></label>
+          <div data-t="diff" style="display:grid;gap:5px">
+            <div class="r"><span>敵人數量</span><span class="rng"><i style="width:80%"></i><b style="left:80%"></b></span><span>3.00</span></div>
+            <div class="r"><span>敵人傷害</span><span class="rng"><i style="width:0%"></i><b style="left:0%"></b></span><span>1.00</span></div>
+            <div class="r"><span>敵人血量</span><span class="rng"><i style="width:37%"></i><b style="left:37%"></b></span><span>1.55</span></div>
+            <div class="r"><span>敵人速度</span><span class="rng"><i style="width:33%"></i><b style="left:33%"></b></span><span>1.25</span></div>
+            <div class="r"><span>事件數量</span><span class="rng"><i style="width:67%"></i><b style="left:67%"></b></span><span>2.00</span></div>
+          </div>
+          <label data-t="runs">打 <span class="num">0</span> 場後停止 <span class="hint">0＝不停</span></label>
+          <label>結算後等 <span class="num">10</span> 秒再進關</label>
+        </div>
+        <!-- 技能 -->
+        <div class="pg" data-pg="skill">
+          <div class="h">技能優先序 <span class="hint">服事</span></div>
+          <div class="ta tall" id="ta-pri" data-t="pri" data-ph="一行一個，越上面越優先"></div>
+          <div class="h">不要的技能 <span class="hint">出現就放逐、絕不選</span></div>
+          <div class="ta" id="ta-ban" data-t="sban" data-ph="例：緩速術"></div>
+          <div class="h">核心技能 <span class="hint">出現就專注</span></div>
+          <div class="ta" id="ta-foc" data-ph="例：神聖之光"></div>
+        </div>
+        <!-- 寶箱 -->
+        <div class="pg" data-pg="chest">
+          <div class="h">寶箱優先序 <span class="hint">比對卡片文字</span></div>
+          <div class="ta tall" id="ta-chest" data-t="cpri" data-ph="一行一個，越上面越優先"></div>
+          <label data-t="minq">品質低於 <span class="dd" id="minq">史詩</span> 就重抽</label>
+          <label data-t="swap"><span class="cb on"></span>盡量不換掉身上的裝備</label>
+          <div class="h">不要的 <span class="hint">出現就放逐</span></div>
+          <div class="ta" data-ph="例：藥水"></div>
+          <div class="h">想要的 <span class="hint">出現就專注</span></div>
+          <div class="ta" data-ph="例：記憶之神"></div>
+          <div class="box"><label class="h">👥 組隊擲骰 <span class="dd">自己按</span></label></div>
+        </div>
+        <!-- 神祇 -->
+        <div class="pg" data-pg="deity">
+          <div class="hint">🎯＝想要　✕＝不要</div>
+          <div class="dg" id="dg"></div>
+        </div>
+        <!-- 重抽 -->
+        <div class="pg" data-pg="perk">
+          <div class="hint">每場最多用幾次（0＝不用）。遊戲每場的總次數是共用的</div>
+          <table data-t="ptable"><thead><tr><th></th><th>單張</th><th>全部</th><th>放逐</th><th>專注</th></tr></thead>
+            <tbody>
+              <tr><td>神祇</td><td><span class="num">4</span></td><td><span class="num">0</span></td><td><span class="num">2</span></td><td><span class="num">1</span></td></tr>
+              <tr><td>寶箱</td><td><span class="num">2</span></td><td><span class="num">1</span></td><td><span class="num">2</span></td><td><span class="num">0</span></td></tr>
+              <tr><td>技能</td><td><span class="num">0</span></td><td><span class="num">0</span></td><td><span class="num">1</span></td><td><span class="num">1</span></td></tr>
+            </tbody></table>
+          <label data-t="huntall"><span class="cb on"></span>獵神時全部先給神祇 <span class="hint">拿到後才照上表</span></label>
+        </div>
+        <!-- 紀錄 -->
+        <div class="pg" data-pg="log">
+          <span class="ex">範例數字</span>
+          <div class="stat" data-t="stats"><div><b>8</b>通關</div><div><b>1</b>死亡</div><div><b>1</b>放棄</div></div>
+          <div class="hint">達成率 80%　平均 15:02　Lv 70　獵到神祇 0:48</div>
+          <div style="display:flex;gap:6px"><span class="btn" style="flex:1">匯出場次</span><span class="btn" style="flex:1">匯出掉落</span><span class="btn">清除</span></div>
+          <div class="hint">每場結束自動記錄（存在這個瀏覽器）</div>
+        </div>
+      </div>
+      <div class="st" id="pst">hook ✓✓　城鎮</div>
+    </div>
+  </div>
+</template>
+
+<script>
+(() => {
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const stage = $('#stage'), scenesEl = $('#scenes'), cur = $('#cur');
+  const tpl = $('#tpl').innerHTML;
+  const DEITY = ['堡壘之神','記憶之神','生命之神','智慧之神','思想之神','力量之神','戰爭之神','疾風之神','處刑之神','貪婪之神','束縛之神','詭計之神','折磨之神','轉移神祇'];
+  const ADDR = { gh: 'github.com/KeplerJhih/ro-survivors-plugin', ext: 'chrome://extensions', game: 'ro-survivors.com' };
+  let timers = [];
+  const later = (fn, ms) => timers.push(setTimeout(fn, ms));
+  const clearTimers = () => { timers.forEach(clearTimeout); timers.forEach(clearInterval); timers = []; };
+
+  const check = (id, on = true) => $('#' + id)?.classList.toggle('on', on);
+  const typeInto = (el, text, instant) => {
+    if (instant || reduce) { el.textContent = text; return; }
+    el.textContent = ''; let i = 0;
+    const t = setInterval(() => { el.textContent = text.slice(0, ++i); if (i >= text.length) clearInterval(t); }, 60);
+    timers.push(t);
+  };
+  const setTab = (k) => {
+    $$('#rp nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === k));
+    $$('#rp .pg').forEach((p) => p.classList.toggle('on', p.dataset.pg === k));
+  };
+  const buildDeity = () => {
+    $('#dg').innerHTML = DEITY.map((d) => `<span>${d}</span><span class="seg" data-d="${d}"><span class="on">—</span><span class="want">🎯</span><span class="ban">✕</span></span>`).join('');
+  };
+  const setDeity = (name, v) => {
+    const sg = $(`#dg .seg[data-d="${name}"]`); if (!sg) return;
+    [...sg.children].forEach((c, i) => c.classList.toggle('on', ['', 'want', 'ban'][i] === v));
+  };
+
+  const steps = [
+    { g: 1, scene: 'gh', t: 'zip', title: '下載外掛',
+      pre: () => $('#ghdd').classList.add('open'),
+      body: '<p>到 GitHub 的 repo 頁面，按綠色的 <b>Code</b>，再按 <b>Download ZIP</b>，下載後解壓縮。</p><p>會用 git 的話，也可以直接 <code>git clone</code>。</p>',
+      note: '解壓後要選的是「裡面直接看得到 manifest.json」的那一層資料夾。' },
+    { g: 1, scene: 'ext', t: 'dev', title: '打開開發人員模式',
+      fx: (i) => { $('#devsw').classList.add('on'); $('#tools').classList.add('on'); },
+      body: '<p>在網址列輸入 <code>chrome://extensions</code>，把右上角的 <b>開發人員模式</b> 打開。</p><p>打開後上方會多出一排按鈕。</p>' },
+    { g: 1, scene: 'ext', t: 'load', title: '載入未封裝項目',
+      fx: (instant) => { $('#picker').classList.add('on'); const done = () => { $('#picker').classList.remove('on'); $('#newcard').classList.add('on'); }; instant || reduce ? done() : later(done, 1500); },
+      body: '<p>按 <b>載入未封裝項目</b>，選剛剛解壓的資料夾。</p><p>出現 <b>RO Survivors Bot 0.7.1</b> 的卡片，而且開關是藍色的，就裝好了。</p>' },
+    { g: 1, scene: 'game', tab: 'main', t: 'pst', title: '打開遊戲，確認面板',
+      body: '<p>到 <code>ro-survivors.com</code>，畫面左上會出現 <b>RO Bot</b> 面板，拖曳藍色標題列可以移動。</p><p>面板底部顯示 <b>hook ✓✓</b>，表示外掛有抓到遊戲。</p>',
+      note: '如果遊戲頁面是在安裝前就開著的，要重新整理一次才會出現 hook ✓✓。' },
+    { g: 2, scene: 'game', tab: 'main', t: 'pnew', title: '建一個設定檔',
+      fx: (instant) => { const f = () => ($('#profsel').textContent = '服事-斐揚洞穴'); instant || reduce ? f() : later(f, 500); },
+      body: '<p>按 <b>＋</b> 新增設定檔，用「職業-關卡」取名，例如 <b>服事-斐揚洞穴</b>。⧉ 複製、✎ 改名、🗑 刪除。</p><p>設定檔記住關卡、技能、寶箱、神祇等設定；換角色時切換設定檔就好。</p>',
+      note: '自動戰鬥、自動選卡、自動進關這幾個開關，以及打幾場、結算等待秒數，是所有設定檔共用的。' },
+    { g: 2, scene: 'game', tab: 'stage', t: 'stagesel', title: '選關卡和難度',
+      fx: () => ($('#stagesel').textContent = '斐揚洞穴'),
+      body: '<p>在 <b>關卡</b> 分頁選要刷的地圖，下面五條拉桿是遊戲的難度倍率（敵人數量 1–3.5、傷害 1–1.75、血量 1–2.5、速度 1–1.75、事件 1–2.5）。</p><p>「打 N 場後停止」填 0 代表一直打；「結算後等 N 秒」實際會隨機 ±20%。</p>' },
+    { g: 2, scene: 'game', tab: 'skill', t: 'pri', title: '排技能優先序',
+      fx: (instant) => { typeInto($('#ta-pri'), '神聖之光\n治癒術', instant); $('#ta-ban').textContent = instant ? '緩速術' : ''; if (!instant && !reduce) later(() => typeInto($('#ta-ban'), '緩速術'), 1300); else $('#ta-ban').textContent = '緩速術'; },
+      body: '<p>一行寫一個技能名稱，越上面越先選。</p><p><b>不要的技能</b>出現就放逐、絕不選；<b>核心技能</b>出現就專注，之後更常出現。</p>',
+      note: '清單是依職業各存一份的，換職業會自動換成那個職業的清單。' },
+    { g: 2, scene: 'game', tab: 'deity', t: 'deity0', title: '指定想要的神祇',
+      fx: () => setDeity('堡壘之神', 'want'),
+      body: '<p>在想要的神祇按 <b>🎯</b>（例如坦用的 <b>堡壘之神</b>），不想要的按 <b>✕</b>。</p><p>🎯 的神祇會最優先、出現就專注；開寶箱沒看到它時，會用單張重抽一直換神祇卡。</p>' },
+    { g: 2, scene: 'game', tab: 'chest', t: 'cpri', title: '設定寶箱怎麼選',
+      fx: (instant) => typeInto($('#ta-chest'), '詠唱速度\n傳說', instant),
+      body: '<p>寶箱優先序會比對卡片上的文字，名稱、品質、部位、數值都可以寫，越上面越優先。</p><p>品質低於設定值就重抽；建議保持勾選 <b>盡量不換掉身上的裝備</b>，避免把已經拿到的神祇換掉。</p>' },
+    { g: 2, scene: 'game', tab: 'perk', t: 'ptable', title: '分配重抽次數',
+      body: '<p>遊戲每場的 單張重抽、全部重抽、放逐、專注 次數是共用的，這張表決定神祇、寶箱、技能各最多用幾次，0＝不用。</p><p>保持勾選 <b>獵神時全部先給神祇</b>：拿到神祇之前次數全留給神祇，拿到後才照表分配。</p>' },
+    { g: 2, scene: 'game', tab: 'main', t: 'flow', title: '選玩法和巡邏條件',
+      fx: (instant) => {
+        const a = () => { $('#flow').textContent = '先巡邏，達成條件後原地掛機'; $('#gatebox').style.display = 'grid'; };
+        const b = () => { $('#need').textContent = '全部'; check('c-skillOn'); $('#skillind').style.display = 'grid'; };
+        if (instant || reduce) { a(); b(); } else { later(a, 300); later(b, 1500); }
+      },
+      body: '<p>玩法選 <b>先巡邏，達成條件後原地掛機</b>：開局到處打怪、找精英怪開寶箱，條件達成後回到安全的原點掛機。</p><p>條件勾 <b>學到技能優先序</b> 和 <b>拿到🎯神祇</b>，並選 <b>全部</b>。</p>',
+      note: '選「任一」時，只要學到第一個技能就會停止獵神。實測兩次都因此沒拿到堡壘之神，原地掛機 5–6 分鐘後被打死。' },
+    { g: 2, scene: 'game', tab: 'main', t: 'popout', title: '長時間掛機設定',
+      pre: () => $('#det-long').classList.add('open'),
+      body: '<p>展開 <b>長時間掛機</b>：分頁不被釋放、電腦保持清醒、重新整理後自動回到遊戲，預設都是開的。</p><p>再按 <b>把遊戲移到獨立視窗</b>。</p>',
+      note: '遊戲分頁被切走、最小化或被其他視窗完全蓋住時，遊戲會停住。讓遊戲單獨一個視窗並且露出來。' },
+    { g: 3, scene: 'game', tab: 'main', t: 'switches', title: '打開三個開關，開始跑',
+      fx: (instant) => {
+        const ids = ['c-fight', 'c-pick', 'c-loop'];
+        if (instant || reduce) { ids.forEach((id) => check(id)); $('#pst').textContent = 'hook ✓✓　巡邏中．獵神'; return; }
+        ids.forEach((id, i) => later(() => check(id), 250 + i * 450));
+        later(() => ($('#pst').textContent = 'hook ✓✓　巡邏中．獵神'), 1700);
+      },
+      body: '<p>設定都好了再打開：</p><p><b>自動戰鬥</b>：移動、閃怪、撿東西。<br><b>自動選卡</b>：升級技能、寶箱、組隊擲骰。<br><b>自動進關</b>：找隊長 → 選關 → 出發 → 結算回城 → 下一場。</p>',
+      note: '隨時按 F8，三個開關會一起關掉。' },
+    { g: 3, scene: 'game', tab: 'log', t: 'reload', title: '看紀錄、更新外掛',
+      body: '<p><b>紀錄</b> 分頁會統計通關、死亡、放棄、平均等級和獵到神祇的時間，可以匯出 CSV（Excel 直接開）。</p><p>外掛出新版時，用新檔案覆蓋資料夾，再按面板右上的 <b>⟳</b>，不用重新整理頁面。</p>',
+      note: '如果更新說明提到 hook.js 或權限有改，要先到 chrome://extensions 按 ↻，再重新整理遊戲頁面。' },
+  ];
+  const GROUPS = { 1: '安裝', 2: '設定', 3: '開跑' };
+
+  // step list
+  const list = $('#list');
+  let lastG = 0;
+  steps.forEach((s, i) => {
+    const li = document.createElement('li');
+    li.innerHTML = `<button type="button" data-i="${i}" title="${s.title}" aria-label="第 ${i + 1} 步：${s.title}"><span class="n">${String(i + 1).padStart(2, '0')}</span></button>`;
+    list.appendChild(li);
+  });
+
+  let idx = 0, playing = false, playT = null;
+
+  function render(i, animate) {
+    clearTimers();
+    scenesEl.innerHTML = tpl;
+    buildDeity();
+    for (let j = 0; j < i; j++) { steps[j].pre?.(); steps[j].fx?.(true); }
+    // 每個設定步驟換分頁後，前面暫時打開的下拉不該殘留在別的場景
+    $('#ghdd') && i > 0 && $('#ghdd').classList.remove('open');
+    const s = steps[i];
+    $$('.scene', scenesEl).forEach((el) => el.classList.toggle('on', el.dataset.scene === s.scene));
+    setTab(s.tab || 'main');
+    s.pre?.();
+    $('#addr').textContent = ADDR[s.scene];
+
+    // side text
+    const ph = $('#phase'); ph.textContent = GROUPS[s.g]; ph.className = 'phase p' + s.g;
+    $('#count').textContent = `${String(i + 1).padStart(2, '0')} / ${steps.length}`;
+    $('#prog').style.width = ((i + 1) / steps.length * 100) + '%';
+    $('#stitle').textContent = s.title;
+    $('#sbody').innerHTML = s.body + (s.note ? `<div class="note">${s.note}</div>` : '');
+    $$('#list button').forEach((b) => b.toggleAttribute('aria-current', false));
+    const cb = $(`#list button[data-i="${i}"]`); cb.setAttribute('aria-current', 'step');
+    cb.scrollIntoView({ block: 'nearest' });
+    $('#prev').disabled = i === 0; $('#next').disabled = i === steps.length - 1;
+
+    const target = s.t === 'deity0' ? $('#dg .seg[data-d="堡壘之神"] .want') : s.t === 'pst' ? $('#pst') : $(`[data-t="${s.t}"]`, scenesEl);
+    const doFx = (instant) => { s.fx?.(instant); target?.classList.add('hl'); };
+    if (!target) { doFx(true); return; }
+    if (!animate || reduce) { moveCursor(target, false); doFx(true); return; }
+    requestAnimationFrame(() => {
+      moveCursor(target, true);
+      later(() => { cur.classList.remove('click'); void cur.offsetWidth; cur.classList.add('click'); doFx(false); }, 750);
+    });
+  }
+
+  function moveCursor(target, smooth) {
+    const r = target.getBoundingClientRect(), sr = stage.getBoundingClientRect();
+    const x = r.left - sr.left + Math.min(r.width * 0.55, r.width - 6);
+    const y = r.top - sr.top + r.height * 0.55;
+    if (!smooth) cur.style.transition = 'none';
+    cur.style.transform = `translate(${x}px,${y}px)`;
+    if (!smooth) { void cur.offsetWidth; cur.style.transition = ''; }
+  }
+
+  function go(i, animate = true) { idx = Math.max(0, Math.min(steps.length - 1, i)); render(idx, animate); if (playing) schedule(); }
+  function schedule() {
+    clearTimeout(playT);
+    playT = setTimeout(() => { if (idx < steps.length - 1) go(idx + 1); else setPlay(false); }, 6200);
+  }
+  function setPlay(on) {
+    playing = on; $('#play').textContent = on ? '❚❚ 暫停' : '▶ 自動播放';
+    clearTimeout(playT);
+    if (on) { if (idx === steps.length - 1) go(0); else schedule(); }
+  }
+
+  $('#prev').onclick = () => go(idx - 1);
+  $('#next').onclick = () => go(idx + 1);
+  $('#play').onclick = () => setPlay(!playing);
+  list.addEventListener('click', (e) => { const b = e.target.closest('button[data-i]'); if (b) go(+b.dataset.i); });
+  document.addEventListener('keydown', (e) => {
+    if (e.target.closest('input,textarea,select')) return;
+    if (e.key === 'ArrowRight') go(idx + 1); else if (e.key === 'ArrowLeft') go(idx - 1);
+  });
+  // 面板分頁可以自己點來看
+  stage.addEventListener('click', (e) => {
+    const b = e.target.closest('#rp nav button'); if (!b) return;
+    setTab(b.dataset.tab); $$('.hl', scenesEl).forEach((x) => x.classList.remove('hl'));
+    cur.style.transform = 'translate(-40px,-40px)';
+  });
+  addEventListener('resize', () => { const h = $('.hl', scenesEl); if (h) moveCursor(h, false); });
+
+  render(0, false);
+  if (!reduce) later(() => render(0, true), 600);
+})();
+</script>
+</body>
+</html>
