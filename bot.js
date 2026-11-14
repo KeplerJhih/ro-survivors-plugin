@@ -6,7 +6,7 @@
   if (window.__roBot?.destroy) { try { window.__roBot.destroy(); } catch {} }
   const H = window.__roHook || (window.__roHook = { run: null, lobby: null, runs: 0, runSeq: 0, drops: 0, stuck: 0 });
   const BOT = (window.__roBot = {
-    version: '0.7.2',
+    version: '0.7.3',
     get run() { return H.run; },
     get lobby() { return H.lobby; },
     get runs() { return H.runs; }, set runs(v) { H.runs = v; },
@@ -831,6 +831,13 @@
         const rb = $$('button', dlg).find((b) => visible(b) && b.classList.contains('primary'));
         if (rb) { log('遊戲有新版本 → 重新整理'); return void clickBtn(rb, 5000); }
       }
+      // 未完成的一局（瀏覽器還留著上一場的存檔，結算後偶爾沒清掉）：按主按鈕「繼續」
+      // 遊戲會先問伺服器：已結束 → 戰利品寄郵差、經驗照算，接著跳「這局已經結束…」也是按主按鈕「OK」；還開著 → 接著打
+      // （v0.7.3 前會一直卡在這裡，5 分鐘後被判閒置登出）
+      if (/未完成的一局|Partida a medias|Unfinished run/i.test($('#npc-name')?.textContent || '')) {
+        const pb = $$('button', dlg).find((b) => visible(b) && b.classList.contains('primary'));
+        if (pb) { log('未完成的一局 →', pb.innerText.trim()); return void clickBtn(pb, rnd(1500, 2500)); }
+      }
       if (/選擇大廳/.test(dlg.innerText)) {
         const last = $$('button,[role=button],li,div', dlg).filter((e) => visible(e) && /上次/.test(e.innerText) && e.innerText.length < 40).pop();
         if (last) return void clickBtn(last, rnd(1500, 2500));
@@ -1072,6 +1079,11 @@
   }
   function loginTick() {
     if (!ready()) return;
+    // 廣場 5 分鐘沒動作被登出：「你已 5 分鐘沒有動作…」→ 按「我知道了」，再照常按開始遊戲
+    if (/沒有動作|sin tocar|inactiv/i.test(document.body.innerText)) {
+      const ok = btnByText(/^(我知道了|Entendido|OK|Got it|Vale)$/i);
+      if (ok) { log('閒置被登出 → 關閉提示，重新登入'); return void clickBtn(ok, rnd(1500, 2500)); }
+    }
     const play = $('#btn-play');
     if (visible(play)) {
       let want = H.lastChar; try { want ||= localStorage.getItem('roBot.lastChar'); } catch {}
