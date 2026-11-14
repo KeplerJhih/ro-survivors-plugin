@@ -6,7 +6,7 @@
   if (window.__roBot?.destroy) { try { window.__roBot.destroy(); } catch {} }
   const H = window.__roHook || (window.__roHook = { run: null, lobby: null, runs: 0, runSeq: 0, drops: 0, stuck: 0 });
   const BOT = (window.__roBot = {
-    version: '0.7.5',
+    version: '0.7.6',
     get run() { return H.run; },
     get lobby() { return H.lobby; },
     get runs() { return H.runs; }, set runs(v) { H.runs = v; },
@@ -1607,7 +1607,7 @@
              (deityGoal() ? `  神祇 ${huntDone() ? '✓' : BOT.rs?.huntFailed ? '放棄' : '…'}（寶箱 ${r.chestsOpened ?? 0}）` : '') : `模式：${effMode() === 'idle' ? '原地掛機' : '遊走'}`) +
            (effMode() === 'idle' && BOT.anchor && P ? `  離原點 ${Math.round(hyp(P.x - BOT.anchor.x, P.y - BOT.anchor.y))}${BOT.sweep ? ' 掃圈' : ''}` : '') + '\n'
          : '\n') +
-      `掉落 ${BOT.drops || 0}  進關 ${BOT.runs}${cfg.maxRuns ? '/' + cfg.maxRuns : ''}  hook ${BOT.run ? '✓' : '✗'}${BOT.lobby ? '✓' : '✗'}`;
+      `${r?.dropsBy ? `? 裝備 ${mysteryOf(r).myst?.[0] ?? 0}・卡 ${mysteryOf(r).myst?.[1] ?? 0}` : `掉落 ${BOT.drops || 0}`}  進關 ${BOT.runs}${cfg.maxRuns ? '/' + cfg.maxRuns : ''}  hook ${BOT.run ? '✓' : '✗'}${BOT.lobby ? '✓' : '✗'}`;
   }
 
   const onKey = (e) => {

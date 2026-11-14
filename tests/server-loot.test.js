@@ -14,9 +14,12 @@ const { chromium } = require('playwright');
   await p.goto('https://ro-survivors.com/');
   await p.addScriptTag({ path: require('path').join(__dirname, '..', 'bot.js') });
   await p.waitForTimeout(2600); // 讓 bot 記下怪物名稱
+  let ok0;
+  ok0 = await p.evaluate(() => /\? 裝備 5・卡 2/.test(document.getElementById('rb-st').textContent));
   await p.evaluate(() => { window.__roHook.run.state = 'over'; });
   await p.waitForTimeout(2600); // 結算標題先出現 → 寫紀錄；物品還在分配
   const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
+  ok(ok0, '狀態列顯示這場 ? 數量');
   ok(await p.evaluate(() => JSON.parse(localStorage.getItem('roBot.drops') || '[]').length) === 0, '分配中不記掉落');
   await p.evaluate(() => { const g = document.getElementById('go-server-loot'); g.className = ''; g.innerHTML = '<div class="go-items"><img class="q4" title="Necklace of Luck (傳說)"><img class="q0" title="Munak Hat (普通)"><img class="q2" title="Skull Ring of Dexterity (稀有)"></div><div class="go-cards"><img class="cardimg" title="Munak Card"><img class="cardimg" title="Skeleton Card"></div>'; });
   await p.waitForTimeout(800);
