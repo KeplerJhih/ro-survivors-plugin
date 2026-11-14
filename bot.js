@@ -6,7 +6,7 @@
   if (window.__roBot?.destroy) { try { window.__roBot.destroy(); } catch {} }
   const H = window.__roHook || (window.__roHook = { run: null, lobby: null, runs: 0, runSeq: 0, drops: 0, stuck: 0 });
   const BOT = (window.__roBot = {
-    version: '0.7.3',
+    version: '0.7.4',
     get run() { return H.run; },
     get lobby() { return H.lobby; },
     get runs() { return H.runs; }, set runs(v) { H.runs = v; },
@@ -422,6 +422,7 @@
     const cand = [];
     for (const o of run.pickups || []) {
       if (o.dead || o.magnet) continue; // magnet = 已經在飛向角色
+      if (o.kind === 'mystery') continue; // 紫色 ?：伺服器掉落，不用撿，時間到自己算拿到
       if (o.kind === 'chest' && !canChest) continue;
       if (o.kind === 'zeny' && (o.value ?? 0) < effZenyMin()) continue;
       if (hyp(o.x - P.x, o.y - P.y) > 900) continue;
@@ -906,7 +907,9 @@
       target: huntActive() ? (huntDone() ? 'yes' : 'no') : '', huntFail: rs.huntFailed || '',
       huntAt: rs.huntAt != null ? Math.round(rs.huntAt) : null,
       result, why: rs.leaveWhy || '', title,
+      seq: H.runSeq,
       drops: (rs.drops || []).map((d) => `${d.q ? d.q + ' ' : ''}${d.name}`),
+      ...mysteryOf(run),
       mode: phase() === 'normal' ? cfg.mode : 'hunt',
     };
     const a = loadLog(); a.push(e); saveLog(a);
@@ -919,6 +922,39 @@
   const saveDrops = (a) => { try { localStorage.setItem(DROP_KEY, JSON.stringify(a.slice(-1000))); } catch {} };
   H.sessionAt ||= performance.timeOrigin; // 本次掛機＝這次開啟頁面起
   function lootLens(run) { return [run.runLoot?.length || 0, run.runCards?.length || 0, run.runEggs?.length || 0]; }
+  // ── v0.7.4 伺服器掉落：關卡中只有紫色 ?（run.dropsBy：怪物 id → [裝備, 卡片]），實際物品在結算畫面 #go-server-loot ──
+  const MOBN = (H.mobNames ||= {}); // 怪物 id → 名稱（關卡中看到時記下）
+  function noteMobs(run) {
+    if (Date.now() - (BOT.mobScanAt || 0) < 2000) return; BOT.mobScanAt = Date.now();
+    for (const e of run.enemies || []) { const d = e.def; if (d?.id && d.name && !MOBN[d.id]) MOBN[d.id] = d.name; }
+  }
+  function mysteryOf(run) {
+    let g = 0, c = 0; const src = [];
+    try { for (const [id, [a, b]] of run.dropsBy || []) { g += a || 0; c += b || 0; src.push(`${MOBN[id] || id} ${a || 0}${b ? '+' + b + '卡' : ''}`); } } catch {}
+    return g + c ? { myst: [g, c], src: src.join('、') } : {};
+  }
+  function captureServerLoot(run) {
+    if (BOT.rs.lootDone) return;
+    const box = $('#go-server-loot');
+    if (!visible(box)) return;
+    const imgs = $$('img', box), note = box.innerText.trim();
+    if (!imgs.length && (!note || /分配|等待|Repartiendo|Esperando|Distribut|Waiting/i.test(note))) return; // 還在分配
+    BOT.rs.lootDone = true;
+    const stage = cfg.loop ? cfg.stage : run.stageId || '';
+    const got = imgs.map((i) => {
+      const t = (i.title || '').trim(), m = t.match(/^(.*) \(([^()]+)\)$/);
+      if (i.classList.contains('cardimg')) return { name: t, q: '', kind: '卡片' };
+      return m ? { name: m[1], q: m[2], kind: '裝備' } : { name: t, q: '', kind: '蛋' };
+    }).filter((d) => d.name).map((d) => ({ at: Date.now(), seq: H.runSeq, stage, stats: '', ...d }));
+    if (!got.length) { log('結算掉落：', note || '(無)'); return; }
+    (BOT.rs.drops ||= []).push(...got);
+    const a = loadDrops(); a.push(...got); saveDrops(a);
+    log('結算掉落', got.length, got.map((d) => `${d.q} ${d.name}`).join('、'));
+    // 紀錄可能已經先寫了（結算標題比物品早出現）→ 補上這場的掉落
+    const L = loadLog(), e = L.findLast?.((x) => x.seq === H.runSeq && Date.now() - x.at < 300000);
+    if (e) { e.drops = BOT.rs.drops.map((d) => `${d.q ? d.q + ' ' : ''}${d.name}`); saveLog(L); }
+    if (cfg.tab === 'log') renderLog(true);
+  }
   function captureReveal(run) {
     const dr = $('#drop-reveal');
     if (!visible(dr)) { BOT.revealSig = null; BOT.lens = lootLens(run); return; }
@@ -971,34 +1007,41 @@
     const rows = a.slice(-60).reverse().map((e) => {
       const d = new Date(e.at), t = `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
       const col = e.result === '死亡' ? '#c0392b' : e.result === '放棄' ? '#b9770e' : e.result === '通關' ? '#1e8449' : '#666';
-      return `<tr title="${e.why || ''}"><td>${t}</td><td>${(e.stage || '').slice(0, 4)}</td><td>${mmss(e.time)}</td><td>${e.level}</td>
-        <td>${e.target === 'yes' ? '🎯' + mmss(e.huntAt) : e.target === 'no' ? '✗' : ''}${e.deity && e.target !== 'yes' ? (e.deity || '').slice(0, 2) : ''}</td><td style="color:${col}">${e.result}</td></tr>`;
+      const bq = QUALITY.find((q) => (e.drops || []).some((x) => x.startsWith(q + ' '))); // 這場最好的品質
+      const tip = [e.why, e.src && `? 來源：${e.src}`, (e.drops || []).length && `掉落：${e.drops.join('、')}`].filter(Boolean).join('\n').replace(/"/g, '&quot;');
+      return `<tr title="${tip}"><td>${t}</td><td>${(e.stage || '').slice(0, 4)}</td><td>${mmss(e.time)}</td><td>${e.level}</td>
+        <td>${e.target === 'yes' ? '🎯' + mmss(e.huntAt) : e.target === 'no' ? '✗' : ''}${e.deity && e.target !== 'yes' ? (e.deity || '').slice(0, 2) : ''}</td>
+        <td style="color:${QCOL[bq] || '#333'}">${e.myst ? `${e.myst[0]}/${e.myst[1]}` : ''}</td><td style="color:${col}">${e.result}</td></tr>`;
     }).join('');
     // 本次掛機掉落
     const ds = loadDrops().filter((d) => d.at >= H.sessionAt);
     const byKind = {}; ds.forEach((d) => (byKind[d.kind] = (byKind[d.kind] || 0) + 1));
     const byQ = {}; ds.forEach((d) => d.q && (byQ[d.q] = (byQ[d.q] || 0) + 1));
     const curRun = (BOT.rs.drops || []).length;
+    const sessRuns = sess.filter((e) => e.myst), avgN = (i) => avg(sessRuns.map((e) => e.myst[i]))?.toFixed(1) ?? '-';
+    const good = loadDrops().filter((d) => ['傳說', '史詩', '稀有'].includes(d.q)).slice(-30).reverse(); // 稀有以上（全部紀錄）
+    const cards = [...new Set(loadDrops().filter((d) => d.kind === '卡片').map((d) => d.name))];
+    const line = (d) => { const t = new Date(d.at); const hm = `${t.getMonth() + 1}/${t.getDate()} ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
+      return `<div style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span class="hint">${hm}</span> <span style="color:${QCOL[d.q] || '#333'}">${d.q || ''}</span> ${d.name} <span class="hint">${d.kind}</span></div>`; };
     const dropHtml = `<div class="sub" style="gap:3px">
       <div><b>本次掛機掉落</b> ${ds.length} 件　<span class="hint">這一場 ${curRun} 件</span></div>
-      <div class="hint">${Object.entries(byKind).map(([k, v]) => `${k} ${v}`).join('　') || '還沒有掉落'}</div>
-      <div>${Object.entries(byQ).map(([k, v]) => `<span style="color:${QCOL[k] || '#333'}">${k} ${v}</span>`).join('　')}</div>
-      <div style="max-height:150px;overflow:auto">${ds.slice(-40).reverse().map((d) => {
-        const t = new Date(d.at); const hm = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
-        return `<div title="${(d.stats || '').replace(/"/g, '&quot;')}" style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span class="hint">${hm}</span> <span style="color:${QCOL[d.q] || '#333'}">${d.q || ''}</span> ${d.name} <span class="hint">${d.kind}</span></div>`;
-      }).join('')}</div>
+      <div class="hint">${Object.entries(byKind).map(([k, v]) => `${k} ${v}`).join('　') || '還沒有掉落（結算時讀取）'}${sessRuns.length ? `　平均每場 裝備 ${avgN(0)}・卡 ${avgN(1)}` : ''}</div>
+      <div>${QUALITY.filter((q) => byQ[q]).map((q) => `<span style="color:${QCOL[q] || '#333'}">${q} ${byQ[q]}</span>`).join('　')}</div>
+      ${good.length ? `<div class="hint">稀有以上</div><div style="max-height:110px;overflow:auto">${good.map(line).join('')}</div>` : ''}
+      ${cards.length ? `<div class="hint">卡片 ${cards.length} 種：${cards.join('、')}</div>` : ''}
+      <details><summary class="hint">本次掛機全部</summary><div style="max-height:150px;overflow:auto">${ds.slice(-60).reverse().map(line).join('')}</div></details>
     </div>`;
     const stalls = loadStalls().filter((x) => x.at >= H.sessionAt);
     const stallHtml = stalls.length ? `<div class="sub" style="gap:2px;background:#fff4e5">
       <div><b>⏸ 遊戲停住</b> ${stalls.length} 次，共 ${mmss(stalls.reduce((p, x) => p + x.dur, 0))}</div>
       ${stalls.slice(-4).reverse().map((x) => { const d = new Date(x.at); return `<div class="hint">${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} 停了 ${mmss(x.dur)}${x.inRun ? '（關卡中）' : ''}</div>`; }).join('')}
       <div class="hint">分頁被切走、最小化或被蓋住時遊戲會停</div></div>` : '';
-    box.innerHTML = stallHtml + dropHtml + sum + `<table class="lg"><thead><tr><th>時間</th><th>關卡</th><th>時長</th><th>Lv</th><th>神祇</th><th>結果</th></tr></thead><tbody>${rows || '<tr><td colspan="6" class="hint">還沒有紀錄（每場結束時寫入）</td></tr>'}</tbody></table>`;
+    box.innerHTML = stallHtml + dropHtml + sum + `<table class="lg"><thead><tr><th>時間</th><th>關卡</th><th>時長</th><th>Lv</th><th>神祇</th><th title="裝備／卡片（紫色 ?）">掉落</th><th>結果</th></tr></thead><tbody>${rows || '<tr><td colspan="7" class="hint">還沒有紀錄（每場結束時寫入）</td></tr>'}</tbody></table>`;
   }
   function exportLog() {
     const a = loadLog();
-    const head = ['時間', '設定檔', '職業', '關卡', '時長(秒)', '等級', '擊殺', '開寶箱', '神祇', '拿到目標', '獵到時間(秒)', '結果', '結算標題', '原因', '模式', '掉落'];
-    const rows = a.map((e) => [new Date(e.at).toLocaleString(), e.profile || '', e.job || '', e.stage, e.time, e.level, e.kills, e.chests, e.deity, e.target, e.huntAt ?? '', e.result, e.title || '', e.why, e.mode, (e.drops || []).join('／')]);
+    const head = ['時間', '設定檔', '職業', '關卡', '時長(秒)', '等級', '擊殺', '開寶箱', '神祇', '拿到目標', '獵到時間(秒)', '結果', '結算標題', '原因', '模式', '掉落', '裝備?', '卡片?', '?來源'];
+    const rows = a.map((e) => [new Date(e.at).toLocaleString(), e.profile || '', e.job || '', e.stage, e.time, e.level, e.kills, e.chests, e.deity, e.target, e.huntAt ?? '', e.result, e.title || '', e.why, e.mode, (e.drops || []).join('／'), e.myst?.[0] ?? '', e.myst?.[1] ?? '', e.src || '']);
     const csv = '\ufeff' + [head, ...rows].map((r) => r.map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
     const link = document.createElement('a'); link.href = url; link.download = `ro-bot-log-${new Date().toISOString().slice(0, 10)}.csv`; link.click();
@@ -1080,8 +1123,9 @@
   function loginTick() {
     if (!ready()) return;
     // 廣場 5 分鐘沒動作被登出：「你已 5 分鐘沒有動作…」→ 按「我知道了」，再照常按開始遊戲
-    if (/沒有動作|sin tocar|inactiv/i.test(document.body.innerText)) {
-      const ok = btnByText(/^(我知道了|Entendido|OK|Got it|Vale)$/i);
+    // （維護前伺服器踢人也是這個提示，標題「暫離」，按鈕「接受」）
+    if (/沒有動作|已離開遊戲|sin tocar|inactiv/i.test(document.body.innerText)) {
+      const ok = btnByText(/^(接受|我知道了|Aceptar|Accept|Entendido|OK|Got it|Vale)$/i);
       if (ok) { log('閒置被登出 → 關閉提示，重新登入'); return void clickBtn(ok, rnd(1500, 2500)); }
     }
     const play = $('#btn-play');
@@ -1179,6 +1223,8 @@
 
         // ②.55 掉落紀錄（不論開關，看到掉落展示就記）
         captureReveal(run);
+        noteMobs(run);
+        if (st === 'over' || st === 'done') captureServerLoot(run);
 
         // ②.6 紀錄：拿到神祇的時間、結束時寫一筆
         if (huntActive() && huntDone() && BOT.rs.huntAt == null) BOT.rs.huntAt = run.time || 0;

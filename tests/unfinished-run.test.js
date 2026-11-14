@@ -26,9 +26,9 @@ const { chromium } = require('playwright');
   ok(!ev.includes('discard'), '沒有按「捨棄」');
   // 閒置登出：標題畫面 + 提示
   await p.evaluate(() => { document.getElementById('lobby-ui').style.display = 'none'; window.__ev = [];
-    document.body.insertAdjacentHTML('beforeend', '<div id="afk"><p>你已 5 分鐘沒有動作，已離開遊戲。按「開始遊戲」即可回來</p><button id="afk">我知道了</button></div>'); });
+    document.body.insertAdjacentHTML('beforeend', '<div id="afk"><b>暫離</b><p>你已 5 分鐘沒有動作，已離開遊戲。按「開始遊戲」即可回來；伺服器額滿時會進入排隊。</p><button id="afk">接受</button></div>'); });
   await p.waitForTimeout(4000);
-  ok((await p.evaluate(() => window.__ev)).includes('afk'), '閒置登出 → 按「我知道了」');
+  ok((await p.evaluate(() => window.__ev)).includes('afk'), '暫離提示 → 按「接受」');
   ok(!errs.length, 'no page errors ' + errs.join(';'));
   await b.close();
 })();

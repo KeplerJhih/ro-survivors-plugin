@@ -232,7 +232,7 @@ dl.faq dd{margin:2px 0 0;color:var(--muted);font-size:14px}
 
 <div class="wrap">
   <header class="hero">
-    <div class="eyebrow">RO Survivors Bot · v0.7.2 · Chrome 擴充功能</div>
+    <div class="eyebrow">RO Survivors Bot · v0.7.4 · Chrome 擴充功能</div>
     <h1>從安裝到掛機，<em>14 步</em>設定好</h1>
     <p>右邊按「下一步」或「自動播放」，左邊的模擬畫面會示範要點哪裡、填什麼。左邊面板的分頁也可以自己點來看。</p>
     <div class="repo">下載位置 <span class="url">https://github.com/KeplerJhih/ro-survivors-plugin</span></div>
@@ -338,7 +338,7 @@ dl.faq dd{margin:2px 0 0;color:var(--muted);font-size:14px}
     <span class="hero-dot"></span>
 
     <div class="rp" id="rp">
-      <header><span>RO Bot</span><small>v0.7.2</small><span class="sp"></span><span class="hb" data-t="reload">⟳</span><span class="hb">－</span></header>
+      <header><span>RO Bot</span><small>v0.7.4</small><span class="sp"></span><span class="hb" data-t="reload">⟳</span><span class="hb">－</span></header>
       <div class="pf"><span>設定檔</span><span class="sel" id="profsel">預設</span><span class="b" data-t="pnew">＋</span><span class="b">⧉</span><span class="b">✎</span><span class="b">🗑</span></div>
       <nav>
         <button type="button" data-tab="main">控制</button><button type="button" data-tab="stage">關卡</button><button type="button" data-tab="skill">技能</button><button type="button" data-tab="chest">寶箱</button><button type="button" data-tab="perk">重抽</button><button type="button" data-tab="log">紀錄</button>
@@ -450,6 +450,9 @@ dl.faq dd{margin:2px 0 0;color:var(--muted);font-size:14px}
           <span class="ex">範例數字</span>
           <div class="stat" data-t="stats"><div><b>8</b>通關</div><div><b>1</b>死亡</div><div><b>1</b>放棄</div></div>
           <div class="hint">達成率 80%　平均 15:02　Lv 70　獵到神祇 0:48</div>
+          <div class="hint">本次掛機掉落 14 件　裝備 9・卡片 5　平均每場 裝備 9.0・卡 5.0</div>
+          <div><span style="color:#d35400">傳說 1</span>　<span style="color:#2471a3">稀有 2</span>　<span style="color:#1e8449">優良 1</span>　<span style="color:#666">普通 5</span></div>
+          <div class="hint">稀有以上：<span style="color:#d35400">Necklace of Luck</span>、<span style="color:#2471a3">Ninja Suit of Luck</span></div>
           <div style="display:flex;gap:6px"><span class="btn" style="flex:1">匯出場次</span><span class="btn" style="flex:1">匯出掉落</span><span class="btn">清除</span></div>
           <div class="hint">每場結束自動記錄（存在這個瀏覽器）</div>
         </div>
@@ -546,7 +549,7 @@ dl.faq dd{margin:2px 0 0;color:var(--muted);font-size:14px}
       body: '<p>設定都好了再打開：</p><p><b>自動戰鬥</b>：移動、閃怪、撿東西。<br><b>自動選卡</b>：升級技能、寶箱、組隊擲骰。<br><b>自動進關</b>：找隊長 → 選關 → 出發 → 結算回城 → 下一場。</p>',
       note: '隨時按 F8，三個開關會一起關掉。' },
     { g: 3, scene: 'game', tab: 'log', t: 'reload', title: '看紀錄、更新外掛',
-      body: '<p><b>紀錄</b> 分頁會統計通關、死亡、放棄、平均等級和獵到神祇的時間，可以匯出 CSV（Excel 直接開）。</p><p>外掛出新版時，用新檔案覆蓋資料夾，再按面板右上的 <b>⟳</b>，不用重新整理頁面。</p>',
+      body: '<p><b>紀錄</b> 分頁會統計通關、死亡、放棄、平均等級和獵到神祇的時間，可以匯出 CSV（Excel 直接開）。</p><p>掉落在結算畫面讀取：每場記下拿到的裝備、卡片和品質，以及關卡中紫色 ? 是哪些怪掉的；稀有以上的物品會另外列出來。</p><p>外掛出新版時，用新檔案覆蓋資料夾，再按面板右上的 <b>⟳</b>，不用重新整理頁面。</p>',
       note: '如果更新說明提到 hook.js 或權限有改，要先到 chrome://extensions 按 ↻，再重新整理遊戲頁面。' },
   ];
   const GROUPS = { 1: '安裝', 2: '設定', 3: '開跑' };
