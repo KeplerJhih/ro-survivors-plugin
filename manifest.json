@@ -1,0 +1,53 @@
+{
+  "manifest_version": 3,
+  "name": "RO Survivors Bot",
+  "version": "0.7.1",
+  "description": "RO Survivors 自動遊玩：自動戰鬥、原地掛機、選技能、寶箱策略、循環關卡",
+  "permissions": [
+    "scripting",
+    "storage",
+    "power"
+  ],
+  "host_permissions": [
+    "https://ro-survivors.com/*"
+  ],
+  "background": {
+    "service_worker": "bg.js"
+  },
+  "externally_connectable": {
+    "matches": [
+      "https://ro-survivors.com/*"
+    ]
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://ro-survivors.com/*"
+      ],
+      "js": [
+        "hook.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://ro-survivors.com/*"
+      ],
+      "js": [
+        "bridge.js"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://ro-survivors.com/*"
+      ],
+      "js": [
+        "bot.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    }
+  ]
+}
