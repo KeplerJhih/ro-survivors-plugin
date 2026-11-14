@@ -6,7 +6,7 @@
   if (window.__roBot?.destroy) { try { window.__roBot.destroy(); } catch {} }
   const H = window.__roHook || (window.__roHook = { run: null, lobby: null, runs: 0, runSeq: 0, drops: 0, stuck: 0 });
   const BOT = (window.__roBot = {
-    version: '0.7.4',
+    version: '0.7.5',
     get run() { return H.run; },
     get lobby() { return H.lobby; },
     get runs() { return H.runs; }, set runs(v) { H.runs = v; },
@@ -1289,9 +1289,12 @@
     try { pos = JSON.parse(localStorage.getItem('roBot.pos') || '{}'); } catch {}
     panel.style.left = (pos.left ?? 12) + 'px';
     panel.style.top = (pos.top ?? 70) + 'px';
+    if (pos.w) panel.style.width = pos.w + 'px'; // v0.7.5 面板可拖右下角調整大小，記住寬高
+    if (pos.h) panel.style.height = pos.h + 'px';
+    const savePos = () => { try { const o = { left: panel.offsetLeft, top: panel.offsetTop }; if (!panel.classList.contains('min')) { o.w = panel.offsetWidth; o.h = panel.offsetHeight; } else { const old = JSON.parse(localStorage.getItem('roBot.pos') || '{}'); o.w = old.w; o.h = old.h; } localStorage.setItem('roBot.pos', JSON.stringify(o)); } catch {} };
     panel.innerHTML = `
 <style>
-#robot-panel{position:fixed;z-index:2147483647;width:240px;max-height:calc(100vh - 16px);display:flex;flex-direction:column;font:12px/1.4 system-ui,sans-serif;color:#1d2a44;background:rgba(255,255,255,.97);border:1px solid #9fb3d9;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.25);user-select:none}
+#robot-panel{position:fixed;z-index:2147483647;box-sizing:border-box;width:240px;min-width:240px;min-height:140px;max-width:calc(100vw - 8px);max-height:calc(100vh - 16px);resize:both;overflow:hidden;display:flex;flex-direction:column;font:12px/1.4 system-ui,sans-serif;color:#1d2a44;background:rgba(255,255,255,.97);border:1px solid #9fb3d9;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.25);user-select:none}
 #robot-panel *{box-sizing:border-box}
 #robot-panel header{cursor:move;padding:5px 8px;background:#5b8def;color:#fff;border-radius:7px 7px 0 0;display:flex;align-items:center;gap:6px;font-weight:600}
 #robot-panel header .sp{flex:1}
@@ -1318,6 +1321,7 @@
 #robot-panel .st{font-size:11px;color:#445;white-space:pre-line;background:#eef2fa;padding:5px 8px;border-top:1px solid #d5def0;border-radius:0 0 7px 7px}
 #robot-panel .btn{all:unset;cursor:pointer;text-align:center;padding:3px 6px;border:1px solid #9fb3d9;border-radius:4px;background:#fff}
 #robot-panel.min .pf,#robot-panel.min nav,#robot-panel.min .body{display:none}
+#robot-panel.min{height:auto!important;min-height:0;resize:none}
 #robot-panel details.dt{border:1px solid #d5def0;border-radius:5px}
 #robot-panel details.dt summary{cursor:pointer;padding:4px 6px;font-weight:600;color:#2b3f66;background:#f3f6fc;border-radius:5px}
 #robot-panel details.dt .dtb{display:grid;gap:5px;padding:6px}
@@ -1524,7 +1528,7 @@
       window.addEventListener('pointermove', mv);
       window.addEventListener('pointerup', () => {
         window.removeEventListener('pointermove', mv);
-        try { localStorage.setItem('roBot.pos', JSON.stringify({ left: panel.offsetLeft, top: panel.offsetTop })); } catch {}
+        savePos();
       }, { once: true });
     };
     const fit = () => {
@@ -1533,6 +1537,13 @@
       panel.style.maxHeight = innerHeight - panel.offsetTop - 8 + 'px'; // body scrolls instead of overflowing
     };
     window.addEventListener('resize', fit);
+    // 拖右下角改大小（CSS resize）→ 放開時有變才記住；切分頁造成的高度變化不記
+    panel.addEventListener('pointerdown', (e) => {
+      const r = panel.getBoundingClientRect();
+      if (e.clientX < r.right - 18 || e.clientY < r.bottom - 18) return;
+      const w0 = panel.offsetWidth, h0 = panel.offsetHeight;
+      window.addEventListener('pointerup', () => { if (panel.offsetWidth !== w0 || panel.offsetHeight !== h0) savePos(); }, { once: true });
+    });
     BOT.cleanup.push(() => window.removeEventListener('resize', fit));
     fit();
     render(true);
