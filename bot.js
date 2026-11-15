@@ -6,7 +6,7 @@
   if (window.__roBot?.destroy) { try { window.__roBot.destroy(); } catch {} }
   const H = window.__roHook || (window.__roHook = { run: null, lobby: null, runs: 0, runSeq: 0, drops: 0, stuck: 0 });
   const BOT = (window.__roBot = {
-    version: '0.8.1',
+    version: '0.8.2',
     get run() { return H.run; },
     get lobby() { return H.lobby; },
     get runs() { return H.runs; }, set runs(v) { H.runs = v; },
@@ -1240,13 +1240,14 @@
   }
   function loginTick() {
     if (!ready()) return;
-    if (accountTick()) return;
     // 廣場 5 分鐘沒動作被登出：「你已 5 分鐘沒有動作…」→ 按「我知道了」，再照常按開始遊戲
+    // （v0.8.2 移到帳號登入之前：提示蓋在登入畫面上時先關掉）
     // （維護前伺服器踢人也是這個提示，標題「暫離」，按鈕「接受」）
     if (/沒有動作|已離開遊戲|sin tocar|inactiv/i.test(document.body.innerText)) {
       const ok = btnByText(/^(接受|我知道了|Aceptar|Accept|Entendido|OK|Got it|Vale)$/i);
       if (ok) { log('閒置被登出 → 關閉提示，重新登入'); return void clickBtn(ok, rnd(1500, 2500)); }
     }
+    if (accountTick()) return;
     const play = $('#btn-play');
     if (visible(play)) {
       let want = (cfg.char || '').trim() || H.lastChar; try { want ||= localStorage.getItem('roBot.lastChar'); } catch {}
@@ -1272,7 +1273,9 @@
   // ───────────────────────── 7. Run end ─────────────────────────
   function endTick(run) {
     if (!ready()) return;
-    const b = (visible($('#btn-restart')) && $('#btn-restart')) || btnByText(/返回角色|回城|返回|回到|離開|城鎮/);
+    // v0.8.2：結算畫面「返回角色」還沒出來前，上方帳號列的「離開」(#pb-exit) 也看得到，按到會登出 → 等 5 秒才用文字找，且排除帳號列／標題畫面
+    const late = Date.now() - (BOT.rs.overAt || Date.now()) > 5000;
+    const b = (visible($('#btn-restart')) && $('#btn-restart')) || (late && $$('button').find((x) => visible(x) && !x.closest('#profile-bar,#splash') && /返回角色|回城|返回|回到|離開|城鎮/.test(x.innerText.trim())));
     if (b) {
       log('end of run →', b.innerText.trim());
       clickBtn(b, rnd(1500, 2500)); BOT.endHandled = true;
@@ -1284,6 +1287,8 @@
   // ───────────────────────── 8. Main loop ─────────────────────────
   function inRun() {
     const r = BOT.run;
+    // v0.8.2：被登出回到標題畫面時，hook 裡的 run 還停在 over → 不算在關卡中，改走自動登入
+    if (visible($('#sp-login')) || visible($('#sp-register'))) return null;
     return r && r.player && !r.replayMoves && visible($('#lobby-ui')) === false ? r : null;
   }
 
