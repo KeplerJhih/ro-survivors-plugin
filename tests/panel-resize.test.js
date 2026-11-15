@@ -12,7 +12,7 @@ const { chromium } = require('playwright');
   const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
   const pos = () => p.evaluate(() => JSON.parse(localStorage.getItem('roBot.pos') || '{}'));
   ok(await p.evaluate(() => getComputedStyle(document.getElementById('robot-panel')).resize) === 'both', '面板可調整大小 (resize: both)');
-  await p.click('nav button[data-tab=log]'); await p.click('nav button[data-tab=perk]'); await p.waitForTimeout(300);
+  await p.click('nav button[data-tab=log]'); await p.click('nav button[data-tab=skill]'); await p.waitForTimeout(300);
   ok((await pos()).h === undefined, '切分頁不記高度');
   // 模擬拖右下角：在角落按下 → 改尺寸 → 放開
   const r = await p.evaluate(() => { const r = document.getElementById('robot-panel').getBoundingClientRect(); return { x: r.right - 5, y: r.bottom - 5 }; });

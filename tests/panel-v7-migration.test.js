@@ -18,9 +18,9 @@ const SP = __dirname + '/out/';
   // open details
   await p.click('summary >> text=原地掛機細節'); await p.waitForTimeout(200);
   await p.screenshot({ path: SP + 'v7_main2.png', clip: { x: 0, y: 60, width: 260, height: 760 } });
-  for (const t of ['skill', 'chest', 'perk', 'stage']) { await p.click(`nav button[data-tab=${t}]`); await p.waitForTimeout(200); await p.screenshot({ path: SP + `v7_${t}.png`, clip: { x: 0, y: 60, width: 260, height: 600 } }); }
+  for (const t of ['skill', 'chest', 'sys', 'stage']) { await p.click(`nav button[data-tab=${t}]`); await p.waitForTimeout(200); await p.screenshot({ path: SP + `v7_${t}.png`, clip: { x: 0, y: 60, width: 260, height: 600 } }); }
   // binding tests
-  await p.click('nav button[data-tab=perk]'); await p.fill('input[data-k="perks.skill.reroll_card"]', '3'); await p.press('input[data-k="perks.skill.reroll_card"]', 'Tab');
+  await p.click('nav button[data-tab=skill]'); await p.fill('input[data-k="perks.skill.reroll_card"]', '3'); await p.press('input[data-k="perks.skill.reroll_card"]', 'Tab');
   await p.click('nav button[data-tab=main]'); await p.selectOption('#rb-flow', 'roam'); await p.waitForTimeout(200);
   c = await cfg(); console.log('after edits', c.perks.skill, c.gate.on, c.mode);
   await p.selectOption('#rb-flow', 'gate'); await p.waitForTimeout(200);

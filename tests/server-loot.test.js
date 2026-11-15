@@ -4,7 +4,7 @@ const { chromium } = require('playwright');
   const b = await chromium.launch(); const p = await b.newPage({ viewport: { width: 900, height: 900 } }); const errs = []; p.on('pageerror', e => errs.push(e.message));
   await p.route('https://ro-survivors.com/', r => r.fulfill({ contentType: 'text/html; charset=utf-8', body: `<html><head><meta charset="utf-8"></head><body style="background:#334">
     <div id="gameover"><h2 id="go-title">你存活下來了！</h2><div id="go-server-loot" class="go-loot-wait"><p class="go-loot-note">正在分配戰利品…</p></div><button id="btn-restart" disabled>返回角色</button></div></body></html>` }));
-  const GRANTED = { gear: [{ itemId: 2603, quality: 4, affixes: [{ stat: 'luk', v: 3 }] }, { itemId: 5026, quality: 0, affixes: [] }, { itemId: 1720, quality: 2, affixes: [{ stat: 'dex', v: 2 }], refine: 0 }], cards: ['munak', 'skeleton'], eggs: [] };
+  const GRANTED = { gear: [{ itemId: 2603, quality: 4, affixes: [{ stat: 'luk', value: 3 }, { stat: 'crit', value: 0.02 }] }, { itemId: 5026, quality: 0, affixes: [] }, { itemId: 1720, quality: 2, affixes: [{ stat: 'dex', value: 2 }], refine: 0 }], cards: ['munak', 'skeleton'], eggs: [] };
   await p.route('**/api/op', r => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ rev: 1, doc: { secret: 1 }, granted: GRANTED }) }));
   await p.addInitScript(() => {
     // 舊版紀錄（只有字串）＋寄到郵差的那場
@@ -45,7 +45,7 @@ const { chromium } = require('playwright');
   ok(log && JSON.stringify(log.items.slice(0, 3).map(x => [x.slot, x.stat])) === JSON.stringify([['飾品', 'LUK'], ['頭飾', ''], ['武器', 'DEX']]), '部位／素質 ' + JSON.stringify(log?.items));
   await p.waitForTimeout(400);
   const html = await p.evaluate(() => document.getElementById('rb-log')?.innerText || '');
-  ok(/傳說 飾品 Necklace LUK \+3/.test(html) && /稀有 武器 Great Bow DEX \+2/.test(html) && /普通 頭飾 Munak Hat\n/.test(html) && /卡片 Munak・Skeleton/.test(html), '這場小卡：品質 部位 名稱 +素質、卡片 ' + html.slice(0, 600));
+  ok(/傳說 飾品 Necklace LUK \+3、爆擊 \+2%/.test(html) && /稀有 武器 Great Bow DEX \+2/.test(html) && /普通 頭飾 Munak Hat\n/.test(html) && /卡片 Munak・Skeleton/.test(html), '這場小卡：品質 部位 名稱 +素質、卡片 ' + html.slice(0, 600));
   ok(/稀有 Gold Ring \+DEX/.test(html) && /卡片 Munak/.test(html), '舊紀錄也能顯示（素質從名稱解析）');
   ok(/郵差/.test(html), '寄到郵差的那場顯示原因');
   ok(html.indexOf('Necklace') < html.indexOf('Gold Ring'), '最新的在上面');

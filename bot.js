@@ -6,7 +6,7 @@
   if (window.__roBot?.destroy) { try { window.__roBot.destroy(); } catch {} }
   const H = window.__roHook || (window.__roHook = { run: null, lobby: null, runs: 0, runSeq: 0, drops: 0, stuck: 0 });
   const BOT = (window.__roBot = {
-    version: '0.7.9',
+    version: '0.8.1',
     get run() { return H.run; },
     get lobby() { return H.lobby; },
     get runs() { return H.runs; }, set runs(v) { H.runs = v; },
@@ -47,6 +47,7 @@
     keepAwake: true,       // 掛機時保持電腦清醒（chrome.power）
     noDiscard: true,       // 分頁不被 Chrome 自動釋放
     autoRestore: false,    // 視窗被最小化時自動還原
+    manual: false,         // v0.8.0 手動模式：bot 完全不操作（戰鬥、選卡、進關、登入、繼續），各開關設定保留
     autoLogin: true,       // 頁面重新整理後自動：開始遊戲 → 選上次角色 → 進廣場（需開自動進關）
     pick: false,           // 自動選卡（技能 / 寶箱 / 掉落展示）
     loop: false,           // 自動循環進關
@@ -99,7 +100,7 @@
   // ── 設定檔 ──
   // 儲存格式：roBot.cfg = { ...共用設定, profiles: { 名稱: {...設定檔內容} }, activeProfile }
   // 共用：三個自動開關、自動繼續、結算等待、次數上限、目前分頁；其他（模式、關卡難度、選卡、寶箱、神祇…）都跟著設定檔走
-  const GLOBAL_KEYS = ['fight', 'pick', 'loop', 'autoResume', 'reenterDelay', 'maxRuns', 'tab', 'v', 'keepAwake', 'noDiscard', 'autoRestore', 'autoLogin'];
+  const GLOBAL_KEYS = ['fight', 'pick', 'loop', 'autoResume', 'reenterDelay', 'maxRuns', 'tab', 'v', 'keepAwake', 'noDiscard', 'autoRestore', 'autoLogin', 'manual'];
   function normalize(c) {
     c.idleKinds = { ...DEFAULT_CFG.idleKinds, ...(c.idleKinds || {}) };
     c.sweep = { ...DEFAULT_CFG.sweep, ...(c.sweep || {}) };
@@ -968,18 +969,16 @@
     try { const a = JSON.parse(localStorage.getItem(LOOTRAW_KEY) || '[]'); a.push(raw); localStorage.setItem(LOOTRAW_KEY, JSON.stringify(a.slice(-10))); } catch {}
     log('結算回應', op, raw.gear.length, '件裝備', JSON.stringify(raw.gear).slice(0, 300));
   };
-  // affixes 格式未確認前盡量通用：[{stat,v}] / {dex:3} / ['dex', ...]
-  const fmtAff = (a) => {
-    if (!a) return '';
-    const list = Array.isArray(a) ? a : Object.entries(a).map(([k, v]) => ({ k, v }));
-    return list.map((x) => {
-      if (x == null || typeof x !== 'object') return String(x ?? '').toUpperCase();
-      const vals = Object.values(x);
-      const k = x.stat ?? x.k ?? x.key ?? x.id ?? x.type ?? vals.find((v) => typeof v === 'string');
-      const v = x.v ?? x.value ?? x.val ?? x.n ?? x.amount ?? vals.find((v) => typeof v === 'number');
-      return `${String(k ?? '').toUpperCase()}${v != null ? ' +' + (+v.toFixed?.(3) || v) : ''}`;
-    }).filter(Boolean).join('、');
-  };
+  // affixes（2026-11-15 實測）：[{ stat: 'vit', value: 2 }, { stat: 'crit', value: 0.02 }]；六素質、HP、護甲是數值，其他是比例 → 顯示百分比
+  const AFF = { str: 'STR', agi: 'AGI', vit: 'VIT', int: 'INT', dex: 'DEX', luk: 'LUK', hp: 'HP', armor: '護甲',
+    crit: '爆擊', pierce: '穿透', cd: '冷卻', area: '範圍', spd: '移速', flee: '迴避', dmg: '傷害', cast: '詠唱', regen: '回復', pickup: '拾取', exp: '經驗', zeny: 'zeny', dodge: '閃避' };
+  const AFF_FLAT = new Set(['str', 'agi', 'vit', 'int', 'dex', 'luk', 'hp', 'armor']);
+  const fmtAff = (a) => (Array.isArray(a) ? a : []).map((x) => {
+    const k = x?.stat ?? x?.k ?? x?.id, v = +(x?.value ?? x?.v);
+    if (!k) return '';
+    const n = !Number.isFinite(v) ? '' : AFF_FLAT.has(k) ? `+${+v.toFixed(2)}` : `+${+(v * 100).toFixed(1)}%`;
+    return `${AFF[k] || String(k).toUpperCase()} ${n}`.trim();
+  }).filter(Boolean).join('、');
   function captureServerLoot(run) {
     if (BOT.rs.lootDone) return;
     const box = $('#go-server-loot');
@@ -1288,6 +1287,7 @@
     return r && r.player && !r.replayMoves && visible($('#lobby-ui')) === false ? r : null;
   }
 
+  const on = (k) => !cfg.manual && !!cfg[k];
   BOT.timers.push(setInterval(() => {
     try {
       if (BOT.seq !== H.runSeq) { // new run started
@@ -1303,11 +1303,11 @@
         }
 
         // ① 自動戰鬥：移動 / 閃避 / 撿東西
-        if (cfg.fight && st === 'playing') { combatTick(run); BOT.driving = true; }
+        if (on('fight') && st === 'playing') { combatTick(run); BOT.driving = true; }
         else if (BOT.driving) { setMove(run, 0, 0); BOT.driving = false; } // touchMove keeps its last value → zero once
 
         // ② 自動選卡：升級技能、寶箱、交換確認、掉落展示
-        if (cfg.pick) {
+        if (on('pick')) {
           if (st === 'reveal') {
             // equipment / card / egg drop popup: already added to run loot; it closes itself after 4–8 s.
             // Click it after a short look to save time, unless it is a roll choice ([data-c]).
@@ -1325,7 +1325,7 @@
         }
 
         // ②.4 自動繼續：不小心按到暫停（Esc / 切視窗）時，1~2 秒後按「繼續」
-        if (cfg.autoResume && (st === 'paused' || visible($('#pause'))) && !BOT.leaving) { // 組隊時暫停只開選單，state 不變
+        if (on('autoResume') && (st === 'paused' || visible($('#pause'))) && !BOT.leaving) { // 組隊時暫停只開選單，state 不變
           if (!BOT.pausedAt) BOT.pausedAt = Date.now();
           else if (Date.now() - BOT.pausedAt > BOT.resumeDelay) {
             const b = $('#btn-resume');
@@ -1335,7 +1335,7 @@
         } else { BOT.pausedAt = 0; BOT.resumeDelay = rnd(1000, 2000); }
 
         // ②.5 獵目標失敗 → 放棄這場
-        if (cfg.pick && st === 'playing' && !BOT.leaving) {
+        if (on('pick') && st === 'playing' && !BOT.leaving) {
           const why = huntGiveUp(run);
           if (why) {
             if (cfg.huntPhase.onFail === 'farm') { BOT.rs.huntFailed = why; log('獵神失敗 → 直接掛機：', why); }
@@ -1346,7 +1346,7 @@
         if (st === 'playing') learnSkill(run);
 
         // ②.52 組隊掉落擲骰（Need / Greed / 放棄）
-        if (cfg.pick) rollTick();
+        if (on('pick')) rollTick();
 
         // ②.55 掉落紀錄（不論開關，看到掉落展示就記）
         captureReveal(run);
@@ -1363,10 +1363,10 @@
         }
 
         // ③ 自動進關：結算後返回廣場
-        if ((st === 'over' || st === 'done') && cfg.loop) endTick(run);
-      } else if (cfg.loop && !visible($('#lobby-ui')) && cfg.autoLogin) {
+        if ((st === 'over' || st === 'done') && on('loop')) endTick(run);
+      } else if (on('loop') && !visible($('#lobby-ui')) && cfg.autoLogin) {
         loginTick();
-      } else if (cfg.loop && visible($('#lobby-ui'))) {
+      } else if (on('loop') && visible($('#lobby-ui'))) {
         lobbyTick();
       }
     } catch (e) { log('tick error', e); }
@@ -1394,6 +1394,8 @@
   }
   function showOk(expr) {
     const neg = expr.startsWith('!'); if (neg) expr = expr.slice(1);
+    if (expr === '@idle') return (cfg.gate.on || cfg.mode === 'idle') !== neg; // 先巡邏再掛機也會原地掛機
+    if (expr === '@roam') return (cfg.gate.on || cfg.mode === 'roam') !== neg; // 巡邏＝遊走
     const [p, v] = expr.split('=');
     const val = getP(p);
     const ok = v === undefined ? !!val : String(val) === v;
@@ -1407,6 +1409,7 @@
   const SELECT = (k, opts) => `<select data-k="${k}">${opts.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select>`;
   const LIST = (k, ph, h = 46) => `<textarea data-list="${k}" style="height:${h}px" placeholder="${ph}"></textarea>`;
   const PERKS = [['reroll_card', '單張'], ['reroll', '全部'], ['banish', '放逐'], ['focus', '專注']];
+  const PERKROW = (k) => `<table class="pk"><thead><tr>${PERKS.map(([, t]) => `<th>${t}</th>`).join('')}</tr></thead><tbody><tr>${PERKS.map(([p]) => `<td>${NUM(`perks.${k}.${p}`, 38)}</td>`).join('')}</tr></tbody></table>`;
 
   function buildPanel() {
     document.getElementById('robot-panel')?.remove();
@@ -1429,6 +1432,13 @@
 #robot-panel .pf{display:flex;align-items:center;gap:3px;padding:4px 6px;background:#eef2fa;border-bottom:1px solid #d5def0}
 #robot-panel .pf select{flex:1;min-width:0;font:inherit;font-weight:600}
 #robot-panel .pf button{all:unset;cursor:pointer;padding:0 3px;font-size:12px;border:1px solid #c5d2ea;border-radius:3px;background:#fff;line-height:18px}
+#robot-panel header button.pw{padding:0 7px;border-radius:9px;background:rgba(255,255,255,.22);font-size:11px;line-height:18px;font-weight:600}
+#robot-panel.manual header{background:#8a95a8}
+#robot-panel.manual header button.pw{background:#d9534f}
+#robot-panel .man-note{display:none;color:#c0392b}
+#robot-panel.manual .man-note{display:block}
+#robot-panel.manual .box.auto label{opacity:.45}
+#robot-panel .scope{justify-self:end;font-size:10px;color:#6a7a99;background:#eef2fa;border-radius:3px;padding:0 5px}
 #robot-panel nav{display:flex;border-bottom:1px solid #d5def0}
 #robot-panel nav button{all:unset;flex:1;text-align:center;padding:5px 0;cursor:pointer;color:#556}
 #robot-panel nav button.on{color:#2b5fd9;font-weight:600;box-shadow:inset 0 -2px #5b8def}
@@ -1455,7 +1465,6 @@
 #robot-panel table.pk{width:100%;border-collapse:collapse;font-size:12px}
 #robot-panel table.pk th{font-weight:600;color:#556;font-size:11px;padding:2px;text-align:center}
 #robot-panel table.pk td{padding:2px;text-align:center}
-#robot-panel table.pk td:first-child{text-align:left;font-weight:600}
 #robot-panel table.pk input{width:38px}
 #robot-panel table.lg{width:100%;border-collapse:collapse;font-size:11px}
 #robot-panel table.lg th{text-align:left;color:#556;font-weight:600;border-bottom:1px solid #d5def0;padding:2px}
@@ -1466,17 +1475,22 @@
 #robot-panel .seg button[data-v=ban].on{background:#d9534f}
 </style>
 <header><span>RO Bot</span><small id="rb-ver" style="opacity:.8"></small><span class="sp"></span>
+  <button id="rb-manual" class="pw" title="F8：bot 全部停止／恢復，下面的設定都不變"></button>
   <button id="rb-reload" title="從硬碟重新載入 bot（不用刷新頁面）">⟳</button><button id="rb-min" title="收合">－</button></header>
 <div class="pf"><span>設定檔</span><select id="rb-prof"></select>
   <button id="rb-pnew" title="新增（預設值）">＋</button><button id="rb-pcopy" title="複製目前設定檔">⧉</button><button id="rb-pren" title="改名">✎</button><button id="rb-pdel" title="刪除">🗑</button></div>
-<nav>${[['main', '控制'], ['stage', '關卡'], ['skill', '技能'], ['chest', '寶箱'], ['perk', '重抽'], ['log', '紀錄']].map(([k, t]) => `<button data-tab="${k}">${t}</button>`).join('')}</nav>
+<nav>${[['main', '玩法'], ['stage', '關卡'], ['skill', '技能'], ['chest', '寶箱'], ['log', '紀錄'], ['sys', '⚙']].map(([k, t]) => `<button data-tab="${k}">${t}</button>`).join('')}</nav>
 <div class="body">
 
   <div class="pg" data-pg="main">
-    ${CHK('fight', '自動戰鬥', '移動・閃怪・撿東西')}
-    ${CHK('pick', '自動選卡', '技能・寶箱・擲骰')}
-    ${CHK('loop', '自動進關', '隊長→關卡→結算回城')}
-    ${CHK('autoResume', '自動繼續', '誤按暫停時')}
+    <div class="box auto">
+      <div class="h" style="display:flex">自動做哪些事<span class="sp" style="flex:1"></span><span class="scope">共用</span></div>
+      <div class="hint man-note">✋ 手動中，下面勾的都不會執行（按標題列「✋ 手動」恢復）</div>
+      ${CHK('fight', '戰鬥', '移動・閃怪・撿東西')}
+      ${CHK('pick', '選卡', '技能・寶箱・擲骰')}
+      ${CHK('loop', '進關', '隊長→關卡→結算回城')}
+    </div>
+    <div class="scope">以下跟著設定檔</div>
     <div class="box">
       <label class="h">玩法 <select id="rb-flow">
         <option value="gate">先巡邏，再原地掛機</option>
@@ -1501,21 +1515,7 @@
         </div>
       </div>
     </div>
-    ${SEC('長時間掛機', `
-      ${CHK('noDiscard', '分頁不被 Chrome 釋放')}
-      ${CHK('keepAwake', '掛機時電腦保持清醒', '螢幕不關、不自動鎖定')}
-      ${CHK('autoRestore', '被最小化時自動還原視窗')}
-      ${CHK('autoLogin', '重新整理後自動回到遊戲', '開始遊戲→選角色→大廳')}
-      <label data-show="autoLogin">　角色名稱 <input type="text" data-k="char" style="width:110px"></label>
-      <div class="hint" data-show="autoLogin">　跟著設定檔走，要跟選角畫面的名稱一樣；空白＝自動記住上次按「開始遊戲」的角色。找不到這個角色時會停在選角畫面，不會用別的角色進遊戲</div>
-      <div data-show="autoLogin" style="display:grid;gap:3px">
-        <div>　帳號 <input id="rb-cu" type="text" autocomplete="off" spellcheck="false" style="width:96px"> 密碼 <input id="rb-cp" type="password" autocomplete="new-password" style="width:80px"></div>
-        <div>　<button class="btn" id="rb-csave" type="button">儲存帳號密碼</button> <button class="btn" id="rb-cclr" type="button">清除</button> <span class="hint" id="rb-cst"></span></div>
-        <div class="hint">　被登出時自動登入（所有設定檔共用）。存在擴充功能裡，遊戲網頁讀不到；密碼以明碼存在這台電腦的 Chrome 設定檔。登入失敗會停下，10 分鐘內不重試</div>
-      </div>
-      <button class="btn" id="rb-popout" type="button">把遊戲移到獨立視窗</button>
-      <div class="hint">遊戲分頁被切走、最小化、被完全蓋住時遊戲會停住；請讓它單獨一個視窗並露出來。所有設定檔共用</div>`)}
-    ${SEC('原地掛機細節', `
+    <div data-show="@idle" style="display:grid">${SEC('原地掛機細節', `
       <div class="hint">會去撿：</div>
       <div class="grid2">
         ${CHK('idleKinds.chest', '寶箱')}${CHK('idleKinds.loot', '裝備/卡/蛋')}
@@ -1530,33 +1530,39 @@
         <label>每 ${NUM('sweep.every', 38, 5)} 秒</label><label>最多 ${NUM('sweep.maxSec', 38, 2)} 秒</label>
         <label>資源 ≥ ${NUM('sweep.minValue', 38, 1)}</label><label>範圍 ${NUM('sweep.radius', 46, 200, 100)}</label>
       </div>
-      <button class="btn" id="rb-anchor" type="button">把目前位置設為原點</button>`)}
-    ${SEC('遊走細節', `
+      <button class="btn" id="rb-anchor" type="button">把目前位置設為原點</button>`)}</div>
+    <div data-show="@roam" style="display:grid">${SEC('遊走細節', `
       <label>閃怪距離 ${NUM('dangerR', 50, 50, 10)}</label>
       ${CHK('lootChest', '錢夠就去開寶箱')}
-      <label>zeny 單筆 ≥ ${NUM('zenyMin', 46, 0, 10)} 才特地去撿</label>`)}
-    <div class="hint">F8：全部停止</div>
+      <label>zeny 單筆 ≥ ${NUM('zenyMin', 46, 0, 10)} 才特地去撿</label>`)}</div>
+    <div class="hint">F8 或標題列的「▶ 自動中／✋ 手動」：bot 全部停止／恢復，設定都不變</div>
   </div>
 
   <div class="pg" data-pg="stage">
+    <div class="scope">關卡、難度跟著設定檔；其他共用</div>
     <label>關卡 <select data-k="stage">${STAGES.map((s) => `<option>${s}</option>`).join('')}</select></label>
     ${DIFF.map((d, i) => `<div class="r"><span>${d.name}</span><input type="range" data-k="diff.${i}" min="${d.min}" max="${d.max}" step="0.05"><span id="rb-dv${i}"></span></div>`).join('')}
     <label>打 ${NUM('maxRuns', 44)} 場後停止 <span class="hint">0＝不停</span></label>
     <label>結算後等 ${NUM('reenterDelay', 44, 0, 5)} 秒再進關</label>
+    ${CHK('autoResume', '自動繼續', '誤按暫停時')}
   </div>
 
   <div class="pg" data-pg="skill">
+    <div class="scope">設定檔</div>
     <div class="h">技能優先序</div>
     ${LIST('priority', '一行一個，越上面越優先&#10;例：&#10;神聖之光&#10;治癒術', 96)}
     <div class="h">不要的技能 <span class="hint">出現就放逐、絕不選</span></div>
     ${LIST('skillBanish', '例：緩速術')}
     <div class="h">核心技能 <span class="hint">出現就專注、之後更常出現</span></div>
     ${LIST('skillFocus', '例：神聖之光')}
-    <div class="hint">沒命中優先序時會用重抽換卡（次數在「重抽」分頁）。清單依職業各存一份</div>
+    <div class="h">每場最多用幾次 <span class="hint">沒命中優先序時用來換卡，0＝不用</span></div>
+    ${PERKROW('skill')}
+    <div class="hint perkleft"></div>
   </div>
 
   <div class="pg" data-pg="chest">
-    <div class="hint">開寶箱時先看神祇，再看其他卡</div>
+    <div class="scope">設定檔</div>
+    <div class="hint">開寶箱時先看神祇，再看其他卡。重抽次數是遊戲每場共用的，技能分頁也會用到</div>
     ${SEC('🎯 神祇', `
       <div class="hint">🎯＝想要（最優先、出現就專注、沒出現就重抽神祇卡）　✕＝不要（出現就放逐、不選）</div>
       <div style="display:grid;grid-template-columns:1fr auto;gap:2px 6px;align-items:center">
@@ -1565,6 +1571,9 @@
       <div class="h">其他想要的 <span class="hint">清單外，例：技能神祇</span></div>
       ${LIST('deityExtra', '一行一個', 34)}
       ${CHK('deityRerollAll', '三張都沒有神祇時也「重抽全部」')}
+      <div class="h">每場最多用幾次</div>
+      ${PERKROW('deity')}
+      ${CHK('perks.huntAll', '獵神時全部先給神祇', '拿到後才照各自的次數')}
     `, true)}
     ${SEC('其他寶箱卡', `
       <div class="h">優先序 <span class="hint">比對卡片文字</span></div>
@@ -1575,8 +1584,36 @@
       ${LIST('chestBanish', '例：藥水')}
       <div class="h">想要的 <span class="hint">出現就專注</span></div>
       ${LIST('chestFocus', '例：詠唱速度')}
+      <div class="h">每場最多用幾次</div>
+      ${PERKROW('chest')}
     `, true)}
+    <div class="hint perkleft"></div>
+  </div>
+
+  <div class="pg" data-pg="sys">
+    <div class="scope">共用（角色名稱除外）</div>
+    ${SEC('帳號與自動登入', `
+      ${CHK('autoLogin', '重新整理後自動回到遊戲', '登入→選角色→大廳')}
+      <div data-show="autoLogin" style="display:grid;gap:4px">
+        <label>角色 <input type="text" data-k="char" style="flex:1;min-width:0"> <span class="hint">跟著設定檔</span></label>
+        <div class="hint">要跟選角畫面的名稱一樣；空白＝自動記住上次按「開始遊戲」的角色。找不到這個角色時會停在選角畫面，不會用別的角色進遊戲</div>
+        <label>帳號 <input id="rb-cu" type="text" autocomplete="off" spellcheck="false" style="flex:1;min-width:0"></label>
+        <label>密碼 <input id="rb-cp" type="password" autocomplete="new-password" style="flex:1;min-width:0"></label>
+        <div><button class="btn" id="rb-csave" type="button">儲存帳號密碼</button> <button class="btn" id="rb-cclr" type="button">清除</button> <span class="hint" id="rb-cst"></span></div>
+        <div class="hint">被登出時自動登入。存在擴充功能裡，遊戲網頁讀不到；密碼以明碼存在這台電腦的 Chrome 設定檔。登入失敗會停下，10 分鐘內不重試</div>
+      </div>`, true)}
+    ${SEC('長時間掛機', `
+      ${CHK('noDiscard', '分頁不被 Chrome 釋放')}
+      ${CHK('keepAwake', '掛機時電腦保持清醒', '螢幕不關、不自動鎖定')}
+      ${CHK('autoRestore', '被最小化時自動還原視窗')}
+      <button class="btn" id="rb-popout" type="button">把遊戲移到獨立視窗</button>
+      <div class="hint">遊戲分頁被切走、最小化、被完全蓋住時遊戲會停住；請讓它單獨一個視窗並露出來</div>`, true)}
+  </div>
+
+  <div class="pg" data-pg="log">
+    <div id="rb-log" style="display:grid;gap:5px"></div>
     ${SEC('👥 組隊擲骰', `
+      <div class="hint">跟著設定檔</div>
       <label>${SELECT('roll.mode', [['off', '自己按'], ['pass', '全部放棄'], ['greed', '全部 Greed'], ['need', '全部 Need'], ['rule', '依規則']])}</label>
       <div data-show="roll.mode=rule" style="display:grid;gap:4px">
         <label>品質 ≥ ${SELECT('roll.needQ', QUALITY.map((q) => [q, q]))} 就 Need</label>
@@ -1586,19 +1623,6 @@
         <div class="hint">一定放棄（名稱）</div>${LIST('roll.passList', '例：皮帽', 34)}
       </div>
     `)}
-  </div>
-
-  <div class="pg" data-pg="perk">
-    <div class="hint">每場最多用幾次（0＝不用）。遊戲每場的總次數是共用的</div>
-    <table class="pk"><thead><tr><th></th>${PERKS.map(([, t]) => `<th>${t}</th>`).join('')}</tr></thead><tbody>
-      ${[['deity', '神祇'], ['chest', '寶箱'], ['skill', '技能']].map(([k, t]) => `<tr><td>${t}</td>${PERKS.map(([p]) => `<td>${NUM(`perks.${k}.${p}`, 38)}</td>`).join('')}</tr>`).join('')}
-    </tbody></table>
-    ${CHK('perks.huntAll', '獵神時全部先給神祇', '拿到後才照上表')}
-    <div class="hint" id="rb-perkleft"></div>
-  </div>
-
-  <div class="pg" data-pg="log">
-    <div id="rb-log" style="display:grid;gap:5px"></div>
     <div style="display:flex;gap:6px"><button class="btn" id="rb-lexp" type="button" style="flex:1">匯出場次</button><button class="btn" id="rb-dexp" type="button" style="flex:1">匯出掉落</button><button class="btn" id="rb-lclr" type="button">清除</button></div>
     <div class="hint">每場結束自動記錄（存在這個瀏覽器）。滑鼠移到「放棄」看原因</div>
   </div>
@@ -1649,6 +1673,7 @@
       });
     };
     g('rb-cclr').onclick = () => extMsg({ type: 'cred:clear' }, () => { BOT.credUser = ''; g('rb-cu').value = ''; g('rb-cp').value = ''; credShow(); });
+    g('rb-manual').onclick = () => setManual(!cfg.manual);
     g('rb-popout').onclick = () => extMsg({ type: 'popout' }, (r) => { panel.querySelector('#rb-st').textContent = r?.ok ? (r.alone ? '已經是獨立視窗了' : '已移到獨立視窗') : '失敗：' + (r?.error || '請先重新載入擴充功能'); });
     g('rb-anchor').onclick = () => { const P = BOT.run?.player; if (P) BOT.anchor = { x: P.x, y: P.y }; render(); };
     g('rb-min').onclick = () => panel.classList.toggle('min');
@@ -1722,6 +1747,7 @@
     }
     if (sel !== act) sel.value = STORE.activeProfile;
     if (cfg.tab === 'deity') cfg.tab = 'chest'; // v0.7.2 神祇分頁併入寶箱
+    if (cfg.tab === 'perk') { cfg.tab = 'skill'; save(); } // v0.8.0 重抽分頁拆進技能／寶箱
     panel.querySelectorAll('nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === cfg.tab));
     panel.querySelectorAll('.pg').forEach((p) => p.classList.toggle('on', p.dataset.pg === cfg.tab));
     if (cfg.tab === 'log' && (full || !BOT.logShown)) { renderLog(true); BOT.logShown = true; }
@@ -1740,9 +1766,12 @@
     { const l = gateSkills(); g('rb-gskl').textContent = l.length ? `＝${l.join('、')}` : '技能分頁還沒有優先序'; }
 
     const r = inRun(), P = r?.player, pk = r?.perksLeft;
-    g('rb-perkleft').textContent = pk ? `這場遊戲還剩：單張 ${pk.reroll_card ?? 0}、全部 ${pk.reroll ?? 0}、放逐 ${pk.banish ?? 0}、專注 ${pk.focus ?? 0}` : '進關後顯示這場剩餘次數';
+    const perkTxt = pk ? `這場遊戲還剩：單張 ${pk.reroll_card ?? 0}、全部 ${pk.reroll ?? 0}、放逐 ${pk.banish ?? 0}、專注 ${pk.focus ?? 0}` : '進關後顯示這場剩餘次數';
+    panel.querySelectorAll('.perkleft').forEach((el) => { el.textContent = perkTxt; });
     const ph = phase();
-    g('rb-st').textContent = (BOT.loginErr ? `⚠ ${BOT.loginErr}\n` : '') + (BOT.loginWarn ? `⚠ 自動登入找不到角色「${BOT.loginWarn}」，請手動選\n` : '') +
+    panel.classList.toggle('manual', !!cfg.manual);
+    g('rb-manual').textContent = cfg.manual ? '✋ 手動' : '▶ 自動中';
+    g('rb-st').textContent = (cfg.manual ? '✋ 手動模式：bot 不操作（按 F8 或標題列「✋ 手動」恢復）\n' : '') + (BOT.loginErr ? `⚠ ${BOT.loginErr}\n` : '') + (BOT.loginWarn ? `⚠ 自動登入找不到角色「${BOT.loginWarn}」，請手動選\n` : '') +
       `${r ? '關卡中 · ' + r.state : visible($('#lobby-ui')) ? '城鎮' + (cfg.loop && H.nextEnterAt > Date.now() ? ` · ${Math.ceil((H.nextEnterAt - Date.now()) / 1000)} 秒後進關` : '') : '—'}` +
       (r ? `  怪 ${BOT.dbg?.enemies ?? '-'}  威脅 ${BOT.dbg?.threat ?? '-'}\n` +
            `HP ${r.hp != null ? Math.round(r.hp) + '/' + Math.round(r.stats?.maxHp ?? 0) : '-'}  zeny ${r.zeny ?? '-'}  卡住 ${BOT.stuck || 0}\n` +
@@ -1755,12 +1784,14 @@
   }
 
   const onKey = (e) => {
-    if (e.key === 'F8') {
-      cfg.fight = false; cfg.pick = false; cfg.loop = false; save(); render();
-      const r = BOT.run; if (r) setMove(r, 0, 0);
-      log('stopped');
-    }
+    if (e.key === 'F8') setManual(!cfg.manual);
   };
+  function setManual(v) {
+    cfg.manual = !!v; save();
+    const r = BOT.run; if (v && r) { setMove(r, 0, 0); BOT.driving = false; }
+    log(v ? '✋ 手動模式：bot 停止操作' : '▶ 恢復自動');
+    render();
+  }
   window.addEventListener('keydown', onKey, true);
   BOT.cleanup.push(() => window.removeEventListener('keydown', onKey, true));
 

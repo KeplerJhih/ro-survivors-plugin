@@ -32,7 +32,7 @@ const SP = __dirname + '/out/';
   await p.click('nav button[data-tab=main]'); await p.click('nav button[data-tab=log]'); await p.waitForTimeout(400);
   console.log('stalls', await p.evaluate(() => localStorage.getItem('roBot.stalls')), errs, logs.filter(l=>/自動登入|背景/.test(l)));
   await p.screenshot({ path: SP + 'v71_log.png', clip: { x: 0, y: 60, width: 260, height: 300 } });
-  await p.click('nav button[data-tab=main]'); await p.click('summary >> text=長時間掛機'); await p.waitForTimeout(300);
+  await p.click('nav button[data-tab=sys]'); await p.waitForTimeout(300);
   await p.screenshot({ path: SP + 'v71_main.png', clip: { x: 0, y: 60, width: 260, height: 760 } });
   await b.close();
 })();
