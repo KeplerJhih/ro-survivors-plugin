@@ -6,7 +6,7 @@
   if (window.__roBot?.destroy) { try { window.__roBot.destroy(); } catch {} }
   const H = window.__roHook || (window.__roHook = { run: null, lobby: null, runs: 0, runSeq: 0, drops: 0, stuck: 0 });
   const BOT = (window.__roBot = {
-    version: '0.8.4',
+    version: '0.8.5',
     get run() { return H.run; },
     get lobby() { return H.lobby; },
     get runs() { return H.runs; }, set runs(v) { H.runs = v; },
@@ -939,7 +939,7 @@
   const slotOf = (id) => (SLOT_R.find(([a, b]) => id >= a && id <= b) || [])[2] || '';
   const STAT = { Strength: 'STR', Agility: 'AGI', Vitality: 'VIT', Intelligence: 'INT', Dexterity: 'DEX', Luck: 'LUK' };
   const splitName = (n) => { const m = (n || '').match(/^(.*) of (Strength|Agility|Vitality|Intelligence|Dexterity|Luck)$/); return m ? [m[1], STAT[m[2]]] : [n || '', '']; };
-  const itemOf = (d) => ({ q: d.q || '', name: d.name, kind: d.kind, slot: d.slot || '', stat: d.stat ?? splitName(d.name)[1], ...(d.aff ? { aff: d.aff } : {}), ...(d.refine ? { refine: d.refine } : {}) });
+  const itemOf = (d) => ({ q: d.q || '', name: d.name, kind: d.kind, slot: d.slot || '', stat: d.stat ?? splitName(d.name)[1], ...(d.id ? { id: d.id } : {}), ...(d.aff ? { aff: d.aff } : {}), ...(d.refine ? { refine: d.refine } : {}) });
   // 舊紀錄只有 "品質 名稱" 字串
   const itemsOfLog = (e) => e.items || (e.drops || []).map((x) => {
     const q = QUALITY.find((k) => x.startsWith(k + ' ')), name = q ? x.slice(q.length + 1) : x;
@@ -977,6 +977,8 @@
     const k = x?.stat ?? x?.k ?? x?.id, v = +(x?.value ?? x?.v);
     if (!k) return '';
     const n = !Number.isFinite(v) ? '' : AFF_FLAT.has(k) ? `+${+v.toFixed(2)}` : `+${+(v * 100).toFixed(1)}%`;
+    // v0.8.5 指定技能加成：{ stat: 'skill', value: 0.18, skill: 'holy_light' } → 技能・Holy Light +18%
+    if (k === 'skill') return `技能${x.skill ? '・' + String(x.skill).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : ''} ${n}`.trim();
     return `${AFF[k] || String(k).toUpperCase()} ${n}`.trim();
   }).filter(Boolean).join('、');
   function captureServerLoot(run) {
@@ -1032,14 +1034,121 @@
   }
   function exportDrops() {
     const a = loadDrops();
-    const head = ['時間', '關卡', '種類', '品質', '部位', '素質', '名稱', '數值'];
-    const rows = a.map((e) => [new Date(e.at).toLocaleString(), e.stage, e.kind, e.q, e.slot || '', e.aff || e.stat || splitName(e.name)[1], e.name, e.stats]);
+    const db = itemDb() || {};
+    const head = ['時間', '關卡', '種類', '品質', '部位', '素質', '名稱', '數值', '職業', '基本能力'];
+    const rows = a.map((e) => { const it = db[e.id];
+      return [new Date(e.at).toLocaleString(), e.stage, e.kind, e.q, e.slot || '', e.aff || e.stat || splitName(e.name)[1], e.name, e.stats, it ? jobsText(it.j) : '', it ? [it.b, it.x].filter(Boolean).join('、') : '']; });
     const csv = '\ufeff' + [head, ...rows].map((r) => r.map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
     const link = document.createElement('a'); link.href = url; link.download = `ro-bot-drops-${new Date().toISOString().slice(0, 10)}.csv`; link.click();
     setTimeout(() => URL.revokeObjectURL(url), 2000);
   }
   const QCOL = { 傳說: '#d35400', 史詩: '#8e44ad', 稀有: '#2471a3', 精良: '#2471a3', 優良: '#1e8449', 普通: '#666' };
+
+  // ── v0.8.5 物品資料表：遊戲公開的 JS 分塊（目前叫 soul_linker-*.js）裡用 Z(id,"weapon",卡槽,[加成],{jobs,wtype})、
+  // re(id,"weapon",n,{atk,matk,def},{jobs})… 定義每件裝備。函式名每次改版都會變 → 只靠格式比對；讀不到就退回編號區間判斷部位、不顯示職業。
+  // 只讀遊戲已經載入的公開檔案（瀏覽器快取），結果依檔名存在 localStorage，改版後才重讀
+  const IDB_KEY = 'roBot.itemDb';
+  const SLOT_ZH = { weapon: '武器', shield: '盾牌', head_top: '頭上', head_mid: '頭中', head_low: '頭下', armor: '護甲', garment: '披肩', shoes: '鞋子', acc: '飾品' };
+  const JOB_ZH = { novice: '初心者', swordsman: '劍士', mage: '魔法師', archer: '弓箭手', acolyte: '服事', thief: '盜賊', merchant: '商人', taekwon: '跆拳', ninja: '忍者', gunslinger: '槍手',
+    knight: '騎士', crusader: '十字軍', wizard: '巫師', sage: '賢者', hunter: '獵人', bard: '詩人', dancer: '舞孃', priest: '祭司', monk: '武僧', assassin: '刺客', rogue: '流氓',
+    blacksmith: '鐵匠', alchemist: '鍊金術師', star_gladiator: '拳聖', soul_linker: '靈媒' };
+  const JOB_BASE = { knight: 'swordsman', crusader: 'swordsman', wizard: 'mage', sage: 'mage', hunter: 'archer', bard: 'archer', dancer: 'archer', priest: 'acolyte', monk: 'acolyte',
+    assassin: 'thief', rogue: 'thief', blacksmith: 'merchant', alchemist: 'merchant', star_gladiator: 'taekwon', soul_linker: 'taekwon' };
+  const BASE_JOBS = ['swordsman', 'mage', 'archer', 'acolyte', 'thief', 'merchant', 'taekwon', 'ninja', 'gunslinger'];
+  const WT_ZH = { '검': '單手劍', '양손검': '雙手劍', '단검': '短劍', '창': '單手矛', '양손창': '雙手矛', '도끼': '單手斧', '양손도끼': '雙手斧', '클럽': '鈍器', '책': '書',
+    '롯드': '杖', '양손롯드': '雙手杖', '활': '弓', '카타르': '拳刃', '수리검': '手裏劍', '권총': '手槍', '라이플': '步槍', '샷건': '霰彈槍', '개틀링': '格林機槍', '그레네이드': '榴彈槍',
+    '너클': '拳套', '악기': '樂器', '채찍': '鞭', '풍마': '風魔手裏劍' };
+  const FX_ZH = { damageMult: '傷害', haste: '冷卻', speedMult: '移速', maxHp: 'HP', doubleChance: '雙重施放', zenyMult: 'zeny', stunChance: '暈眩', critChance: '爆擊',
+    pierceChance: '穿透', critMult: '爆擊傷害', armor: '護甲', areaMult: '範圍', reachMult: '射程', projSpeedMult: '彈速', expMult: '經驗', pickupRadius: '拾取範圍',
+    bossUndeadMult: '對王／不死', bossEliteMult: '對王／菁英', regen: '回復', luck: '幸運' };
+  const FX_FLAT = new Set(['maxHp', 'armor', 'regen']);
+  function parseItemDb(t) {
+    const fx = {}, arr = {}, db = {};
+    for (const m of t.matchAll(/[,;\s]([\w$]+)=[\w$]+\(\(t,e\)=>t\.(\w+)(?:\+=|\*=)/g)) fx[m[1]] = m[2];
+    for (const m of t.matchAll(/[,;\s]([\w$]+)=\[((?:"[a-z_]+",?)+)\]/g)) arr[m[1]] = m[2].match(/[a-z_]+/g);
+    const re = /[;,{\s]([\w$]+)\((\d{3,6}),"(weapon|armor|acc|shoes|garment|shield|head_top|head_mid|head_low)"([^;]*)/g;
+    for (const m of t.matchAll(re)) {
+      const id = m[2], rest = m[4], e = (db[id] ||= { s: m[3] });
+      const jm = rest.match(/jobs:(\[[^\]]*\]|[\w$]+)/);
+      if (jm) e.j = jm[1][0] === '[' ? (jm[1].match(/[a-z_]+/g) || []) : arr[jm[1]] || e.j;
+      const wm = rest.match(/wtype:"([^"]+)"/); if (wm) e.w = wm[1];
+      const bm = rest.match(/\{atk:(\d+),matk:(\d+),def:(\d+)/);
+      if (bm) { e.b = [+bm[1] ? `ATK ${bm[1]}` : '', +bm[2] ? `MATK ${bm[2]}` : '', +bm[3] ? `DEF ${bm[3]}` : ''].filter(Boolean).join(' '); e.x = ''; } // re() 會把加成清空、改用基本值
+      const xm = rest.match(/^,\d+,\[([^\]]*)\]/);
+      if (xm) {
+        const xs = [...xm[1].matchAll(/([\w$]+)\((-?[\d.]+)\)/g)].map(([, f, v]) => { const k = fx[f]; if (!k) return ''; v = +v;
+          return `${FX_ZH[k] || k} ${v < 0 ? '' : '+'}${FX_FLAT.has(k) ? v : +(v * 100).toFixed(1) + '%'}`; }).filter(Boolean);
+        if (xs.length) e.x = xs.join('、');
+      }
+    }
+    return db;
+  }
+  function itemDb() {
+    if (H.itemDb) return H.itemDb;
+    const url = performance.getEntriesByType('resource').map((r) => r.name).find((n) => /\/build\/soul_linker-[\w-]+\.js/.test(n));
+    if (!url) return null;
+    const file = url.split('?')[0].split('/').pop();
+    try { const c = JSON.parse(localStorage.getItem(IDB_KEY) || 'null'); if (c?.file === file && c.db) return (H.itemDb = c.db); } catch {}
+    if (!H.itemDbLoading) {
+      H.itemDbLoading = true;
+      fetch(url).then((r) => r.text()).then((t) => {
+        const db = parseItemDb(t), n = Object.keys(db).length;
+        log('物品資料表', file, n, '件');
+        if (n < 50) return; // 格式變了：不用
+        H.itemDb = db; try { localStorage.setItem(IDB_KEY, JSON.stringify({ file, db })); } catch {}
+        if (cfg.tab === 'log') renderGear();
+      }).catch(() => {}).finally(() => { H.itemDbLoading = false; });
+    }
+    return null;
+  }
+  const jobsText = (j) => (!j || BASE_JOBS.every((b) => j.includes(b)) ? '全職業' : j.map((x) => JOB_ZH[x] || x).join('・'));
+  const myJob = () => { const id = BOT.run?.classDef?.id; if (id) { try { localStorage.setItem('roBot.myJob', id); } catch {} return id; } try { return localStorage.getItem('roBot.myJob') || ''; } catch { return ''; } };
+  const canWear = (j, job) => !j || !job || j.includes(job) || j.includes(JOB_BASE[job]);
+
+  // 裝備總覽：所有場次的裝備放一張表，依品質→時間排序；可篩選品質、部位、範圍、只看目前角色能裝
+  const GV_KEY = 'roBot.gearView', GV_DEF = { q: ['傳說', '史詩', '稀有', '精良', '優良'], s: '', r: 'all', mine: false };
+  const gearView = () => { try { return { ...GV_DEF, ...JSON.parse(localStorage.getItem(GV_KEY) || '{}') }; } catch { return { ...GV_DEF }; } };
+  const GSLOTS = ['武器', '盾牌', '頭飾', '護甲', '披肩', '鞋子', '飾品'];
+  const gslot = (d, it) => { const s = it?.s ? SLOT_ZH[it.s] : d.slot; return /^頭/.test(s || '') ? '頭飾' : s || ''; };
+  function renderGear() {
+    const box = panel?.querySelector('#rb-gear');
+    if (!box) return;
+    const v = gearView(), db = itemDb() || {}, job = myJob();
+    const day = new Date(); day.setHours(0, 0, 0, 0);
+    const since = v.r === 'sess' ? H.sessionAt : v.r === 'day' ? day.getTime() : 0;
+    const all = loadDrops().filter((d) => d.kind === '裝備' && d.at >= since).map((d) => ({ d, it: db[d.id] }));
+    const pre = all.filter(({ d, it }) => (!v.s || gslot(d, it) === v.s) && (!v.mine || canWear(it?.j, job)));
+    const qn = {}; pre.forEach(({ d }) => (qn[d.q] = (qn[d.q] || 0) + 1));
+    const qi = (q) => { const i = QUALITY.indexOf(q); return i < 0 ? 99 : i; };
+    const list = pre.filter(({ d }) => v.q.includes(d.q)).sort((x, y) => qi(x.d.q) - qi(y.d.q) || y.d.at - x.d.at);
+    const chip = (key, val, label, on, col) => `<button type="button" class="gchip${on ? ' on' : ''}" data-gv="${key}:${val}"${col ? ` style="--c:${col}"` : ''}>${label}</button>`;
+    const row = ({ d, it }) => {
+      const [base] = splitName(d.name), w = it?.w ? WT_ZH[it.w] || it.w : '';
+      const ok = canWear(it?.j, job);
+      const aff = (d.aff || (d.stat ? `${d.stat} +?` : '')).replace(/\bSKILL\b/, '技能'); // 0.8.5 前存的是 SKILL
+      const t = new Date(d.at), when = `${t.getMonth() + 1}/${t.getDate()} ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
+      return `<div class="gi"><div><span style="color:${QCOL[d.q] || '#333'};font-weight:600">${d.q}</span> <span class="hint">${it?.s ? SLOT_ZH[it.s] : d.slot || '?'}${w ? '・' + w : ''}</span> ${d.refine ? '+' + d.refine + ' ' : ''}${base}${aff ? ` <b>${aff}</b>` : ''}</div>
+        <div class="hint">${it ? `<span style="color:${ok ? '#1e8449' : '#999'}">${ok && job ? '✓ ' : ''}${jobsText(it.j)}</span>` : ''}${it?.b ? '　' + it.b : ''}${it?.x ? '　' + it.x : ''}　<span style="opacity:.7">${when} ${(d.stage || '').slice(0, 6)}</span></div></div>`;
+    };
+    const jobZh = JOB_ZH[job] || job;
+    box.innerHTML = `<div style="display:flex;align-items:center;gap:4px"><b>🎒 裝備總覽</b><span class="hint">${all.length} 件</span><span style="flex:1"></span>
+        ${chip('r', 'sess', '本次', v.r === 'sess')}${chip('r', 'day', '今天', v.r === 'day')}${chip('r', 'all', '全部', v.r === 'all')}</div>
+      <div class="gchips">${QUALITY.filter((q) => qn[q] || v.q.includes(q) && q !== '精良').map((q) => chip('q', q, `${q} ${qn[q] || 0}`, v.q.includes(q), QCOL[q])).join('')}</div>
+      <div class="gchips">${chip('s', '', '全部位', !v.s)}${GSLOTS.map((s) => chip('s', s, s, v.s === s)).join('')}${job ? chip('mine', v.mine ? 0 : 1, `只看${jobZh}能裝`, v.mine) : ''}</div>
+      <div class="glist">${list.slice(0, 200).map(row).join('') || `<div class="hint">${all.length ? '沒有符合的裝備（換個篩選看看）' : '還沒有裝備紀錄（每場結算時讀取）'}</div>`}</div>
+      ${!H.itemDb && !Object.keys(db).length ? '<div class="hint">讀取物品資料表中…（職業、基本能力稍後出現）</div>' : ''}`;
+  }
+  function onGearClick(ev) {
+    const b = ev.target.closest?.('[data-gv]');
+    if (!b) return;
+    const [k, val] = b.dataset.gv.split(':'), v = gearView();
+    if (k === 'q') v.q = v.q.includes(val) ? v.q.filter((x) => x !== val) : [...v.q, val];
+    else if (k === 'mine') v.mine = val === '1';
+    else v[k] = val;
+    try { localStorage.setItem(GV_KEY, JSON.stringify(v)); } catch {}
+    renderGear();
+  }
 
   function renderLog(force) {
     if (!panel || (!force && cfg.tab !== 'log')) return;
@@ -1085,7 +1194,8 @@
       const col = e.result === '死亡' ? '#c0392b' : e.result === '放棄' ? '#b9770e' : e.result === '通關' ? '#1e8449' : '#666';
       const bq = gear[0]?.q;
       const body = gear.map((x) => { const [base] = splitName(x.name);
-        return `<div style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="color:${QCOL[x.q] || '#333'}">${x.q}</span> <span class="hint">${x.slot || ''}</span> ${x.refine ? '+' + x.refine + ' ' : ''}${base}${x.aff ? ` <b>${x.aff}</b>` : x.stat ? ` <b>+${x.stat}</b>` : ''}</div>`; }).join('')
+        const ij = x.id && H.itemDb?.[x.id];
+        return `<div style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="color:${QCOL[x.q] || '#333'}">${x.q}</span> <span class="hint">${x.slot || ''}</span> ${x.refine ? '+' + x.refine + ' ' : ''}${base}${x.aff ? ` <b>${x.aff}</b>` : x.stat ? ` <b>+${x.stat}</b>` : ''}${ij ? ` <span class="hint">${jobsText(ij.j)}</span>` : ''}</div>`; }).join('')
         + (cards.length ? `<div style="font-size:11px"><span class="hint">卡片</span> ${cards.join('・')}</div>` : '')
         + (eggs ? `<div style="font-size:11px"><span class="hint">寵物蛋</span> ×${eggs}</div>` : '')
         || `<div class="hint">${e.lootNote || (e.myst ? '沒抓到結算物品' : '沒有掉落')}</div>`;
@@ -1098,6 +1208,7 @@
       <div><b>本次掛機掉落</b> ${ds.length} 件　<span class="hint">這一場 ${curRun} 件</span></div>
       <div class="hint">${Object.entries(byKind).map(([k, v]) => `${k} ${v}`).join('　') || '還沒有掉落（結算時讀取）'}${sessRuns.length ? `　平均每場 裝備 ${avgN(0)}・卡 ${avgN(1)}` : ''}</div>
       <div>${QUALITY.filter((q) => byQ[q]).map((q) => `<span style="color:${QCOL[q] || '#333'}">${q} ${byQ[q]}</span>`).join('　')}</div>
+      <div id="rb-gear" class="gear"></div>
       ${recent.length ? `<div class="hint">每場掉落（點標題展開／收合）</div><div style="max-height:260px;overflow:auto">${recent.map((e, i) => runCard(e, i < 3)).join('')}</div>` : ''}
     </div>`;
     const stalls = loadStalls().filter((x) => x.at >= H.sessionAt);
@@ -1105,7 +1216,9 @@
       <div><b>⏸ 遊戲停住</b> ${stalls.length} 次，共 ${mmss(stalls.reduce((p, x) => p + x.dur, 0))}</div>
       ${stalls.slice(-4).reverse().map((x) => { const d = new Date(x.at); return `<div class="hint">${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} 停了 ${mmss(x.dur)}${x.inRun ? '（關卡中）' : ''}</div>`; }).join('')}
       <div class="hint">分頁被切走、最小化或被蓋住時遊戲會停</div></div>` : '';
+    box.onclick = onGearClick;
     box.innerHTML = stallHtml + dropHtml + sum + `<table class="lg"><thead><tr><th>時間</th><th>關卡</th><th>時長</th><th>Lv</th><th>神祇</th><th title="裝備／卡片（紫色 ?）">掉落</th><th>結果</th></tr></thead><tbody>${rows || '<tr><td colspan="7" class="hint">還沒有紀錄（每場結束時寫入）</td></tr>'}</tbody></table>`;
+    renderGear();
   }
   function exportLog() {
     const a = loadLog();
@@ -1473,6 +1586,14 @@
 #robot-panel .man-note{display:none;color:#c0392b}
 #robot-panel.manual .man-note{display:block}
 #robot-panel.manual .box.auto label{opacity:.45}
+#robot-panel .gear{display:grid;gap:3px;border-top:1px dashed #d5dcea;padding-top:4px}
+#robot-panel .gchips{display:flex;flex-wrap:wrap;gap:3px}
+#robot-panel .gchip{all:unset;cursor:pointer;font-size:10px;line-height:16px;padding:0 6px;border:1px solid #c5d2ea;border-radius:8px;color:var(--c,#456);background:#fff}
+#robot-panel .gchip.on{background:var(--c,#5b8def);border-color:var(--c,#5b8def);color:#fff}
+#robot-panel .glist{max-height:280px;overflow:auto;display:grid;gap:2px}
+#robot-panel .gi{font-size:11px;line-height:1.35;padding:2px 3px;border-bottom:1px solid #eef1f7;text-align:left}
+#robot-panel .gi .hint{font-size:10px}
+#robot-panel .gi>.hint{text-align:left}
 #robot-panel .scope{justify-self:end;font-size:10px;color:#6a7a99;background:#eef2fa;border-radius:3px;padding:0 5px}
 #robot-panel nav{display:flex;border-bottom:1px solid #d5def0}
 #robot-panel nav button{all:unset;flex:1;text-align:center;padding:5px 0;cursor:pointer;color:#556}
