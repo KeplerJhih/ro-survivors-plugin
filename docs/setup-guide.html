@@ -122,6 +122,10 @@ code{background:var(--accent-soft);padding:1px 5px;border-radius:4px}
 .rp header{padding:5px 8px;background:var(--p-blue);color:#fff;border-radius:7px 7px 0 0;display:flex;align-items:center;gap:6px;font-weight:600}
 .rp header .sp{flex:1}.rp header small{opacity:.8;font-weight:400}
 .rp header .hb{padding:0 5px;font-size:13px;border-radius:3px}
+.rp header .pw{padding:0 7px;border-radius:9px;background:rgba(255,255,255,.22);font-size:11px;line-height:18px;font-weight:600}
+.rp.manual header{background:#8a95a8}.rp.manual header .pw{background:#d9534f}
+.rp .scope{justify-self:end;font-size:10px;color:#6a7a99;background:#eef2fa;border-radius:3px;padding:0 5px}
+.rp .man-note{display:none;color:#c0392b}.rp.manual .man-note{display:block}.rp.manual .box.auto label{opacity:.45}
 .rp .pf{display:flex;align-items:center;gap:3px;padding:4px 6px;background:var(--p-soft);border-bottom:1px solid var(--p-line)}
 .rp .pf .sel{flex:1;min-width:0;border:1px solid #c5d2ea;background:#fff;border-radius:3px;padding:0 4px;font-weight:600;white-space:nowrap;overflow:hidden}
 .rp .pf .b{padding:0 4px;border:1px solid #c5d2ea;border-radius:3px;background:#fff;line-height:18px}
@@ -232,8 +236,8 @@ dl.faq dd{margin:2px 0 0;color:var(--muted);font-size:14px}
 
 <div class="wrap">
   <header class="hero">
-    <div class="eyebrow">RO Survivors Bot · v0.7.4 · Chrome 擴充功能</div>
-    <h1>從安裝到掛機，<em>14 步</em>設定好</h1>
+    <div class="eyebrow">RO Survivors Bot · v0.8.1 · Chrome 擴充功能</div>
+    <h1>從安裝到掛機，<em>16 步</em>設定好</h1>
     <p>右邊按「下一步」或「自動播放」，左邊的模擬畫面會示範要點哪裡、填什麼。左邊面板的分頁也可以自己點來看。</p>
     <div class="repo">下載位置 <span class="url">https://github.com/KeplerJhih/ro-survivors-plugin</span></div>
   </header>
@@ -268,13 +272,13 @@ dl.faq dd{margin:2px 0 0;color:var(--muted);font-size:14px}
       <div class="tbl"><table class="rec">
         <thead><tr><th>位置</th><th>建議</th><th>原因</th></tr></thead>
         <tbody>
-          <tr><td>控制 › 玩法</td><td>先巡邏，再原地掛機</td><td>前期遊走拿技能和神祇，之後回原點穩定刷</td></tr>
-          <tr><td>控制 › 條件</td><td>勾 <span class="tag">拿到🎯神祇</span> 和 <span class="tag">學到技能</span></td><td>勾的條件全部做到才切換；v0.7.1 的「任一」會提早停止獵神，已拿掉</td></tr>
-          <tr><td>控制 › 獵不到</td><td>開了 10 個寶箱 → 離開這場重來</td><td>一定要拿到神祇才玩就選重來；選「放棄神祇，照常掛機」則繼續這場。0＝不看該條件</td></tr>
-          <tr><td>寶箱 › 🎯 神祇</td><td>想要的按 🎯，例如堡壘之神</td><td>沒出現時會用單張重抽一直換神祇卡</td></tr>
-          <tr><td>重抽</td><td>勾「獵神時全部先給神祇」</td><td>拿到神祇前，重抽次數不花在技能和寶箱</td></tr>
-          <tr><td>寶箱</td><td>勾「盡量不換掉身上的裝備」</td><td>避免新卡把優先序內的裝備換掉</td></tr>
-          <tr><td>長時間掛機</td><td>分頁不被釋放、保持清醒、自動回到遊戲</td><td>預設就是開的；再按一次「移到獨立視窗」</td></tr>
+          <tr><td>玩法 › 玩法</td><td>先巡邏，再原地掛機</td><td>前期遊走拿技能和神祇，之後回原點穩定刷</td></tr>
+          <tr><td>玩法 › 條件</td><td>勾 <span class="tag">拿到🎯神祇</span> 和 <span class="tag">學到技能</span></td><td>勾的條件全部做到才切換</td></tr>
+          <tr><td>玩法 › 獵不到</td><td>開了 10 個寶箱 → 離開這場重來</td><td>一定要拿到神祇才玩就選重來；選「放棄神祇，照常掛機」則繼續這場。0＝不看該條件</td></tr>
+          <tr><td>寶箱 › 🎯 神祇</td><td>想要的按 🎯，例如堡壘之神；勾「獵神時全部先給神祇」</td><td>沒出現時會用單張重抽一直換神祇卡；拿到前重抽次數不花在技能和寶箱</td></tr>
+          <tr><td>寶箱 › 其他寶箱卡</td><td>勾「盡量不換掉身上的裝備」</td><td>避免新卡把優先序內的裝備換掉</td></tr>
+          <tr><td>⚙ › 帳號與自動登入</td><td>填角色名稱、帳號密碼</td><td>遊戲改版或 session 過期被登出時會自動登回、選對角色</td></tr>
+          <tr><td>⚙ › 長時間掛機</td><td>分頁不被釋放、保持清醒</td><td>預設就是開的；再按一次「移到獨立視窗」</td></tr>
         </tbody>
       </table></div>
     </div>
@@ -284,7 +288,8 @@ dl.faq dd{margin:2px 0 0;color:var(--muted);font-size:14px}
         <div><dt>角色不動、遊戲時間沒在走</dt><dd>遊戲分頁被切走、最小化或被其他視窗完全蓋住時，遊戲本身會停住。把遊戲移到獨立視窗，並讓它露出來。</dd></div>
         <div><dt>沒看到面板，或底部不是 hook ✓✓</dt><dd>先確認 chrome://extensions 裡外掛是開著的，再重新整理遊戲頁面。</dd></div>
         <div><dt>外掛有新版本</dt><dd>用新檔案覆蓋資料夾，按面板右上 ⟳ 即可，不用重新整理。若更新說明提到 hook.js 或權限，要到 chrome://extensions 按 ↻ 再重新整理。</dd></div>
-        <div><dt>想馬上停下來</dt><dd>按 F8，自動戰鬥、選卡、進關會一起關掉。</dd></div>
+        <div><dt>想馬上停下來、自己操作</dt><dd>按 F8 或標題列的「▶ 自動中」，變成「✋ 手動」後 bot 全部停止，設定都不變；再按一次就照原本的設定繼續。</dd></div>
+        <div><dt>被登出了</dt><dd>在 ⚙ 分頁存好帳號密碼，bot 會自動登入並選設定檔的角色。登入失敗會停下並在狀態列說明，10 分鐘內不重試。</dd></div>
       </dl>
       <div class="warn">外掛只模擬按鍵、移動和點畫面，不會改遊戲數值。組隊擲骰會影響隊友的掉落，建議只用在自己的進度上。</div>
     </div>
@@ -338,20 +343,22 @@ dl.faq dd{margin:2px 0 0;color:var(--muted);font-size:14px}
     <span class="hero-dot"></span>
 
     <div class="rp" id="rp">
-      <header><span>RO Bot</span><small>v0.7.4</small><span class="sp"></span><span class="hb" data-t="reload">⟳</span><span class="hb">－</span></header>
+      <header><span>RO Bot</span><small>v0.8.1</small><span class="sp"></span><span class="pw" id="pw" data-t="power">▶ 自動中</span><span class="hb" data-t="reload">⟳</span><span class="hb">－</span></header>
       <div class="pf"><span>設定檔</span><span class="sel" id="profsel">預設</span><span class="b" data-t="pnew">＋</span><span class="b">⧉</span><span class="b">✎</span><span class="b">🗑</span></div>
       <nav>
-        <button type="button" data-tab="main">控制</button><button type="button" data-tab="stage">關卡</button><button type="button" data-tab="skill">技能</button><button type="button" data-tab="chest">寶箱</button><button type="button" data-tab="perk">重抽</button><button type="button" data-tab="log">紀錄</button>
+        <button type="button" data-tab="main">玩法</button><button type="button" data-tab="stage">關卡</button><button type="button" data-tab="skill">技能</button><button type="button" data-tab="chest">寶箱</button><button type="button" data-tab="log">紀錄</button><button type="button" data-tab="sys">⚙</button>
       </nav>
       <div class="body">
-        <!-- 控制 -->
+        <!-- 玩法 -->
         <div class="pg" data-pg="main">
-          <div class="sw3" data-t="switches" style="display:grid;gap:4px">
-            <label><span class="cb" id="c-fight"></span>自動戰鬥 <span class="hint">移動・閃怪・撿東西</span></label>
-            <label><span class="cb" id="c-pick"></span>自動選卡 <span class="hint">技能・寶箱・擲骰</span></label>
-            <label><span class="cb" id="c-loop"></span>自動進關 <span class="hint">隊長→關卡→結算回城</span></label>
-            <label><span class="cb on"></span>自動繼續 <span class="hint">誤按暫停時</span></label>
+          <div class="box auto" data-t="switches">
+            <div class="h" style="display:flex">自動做哪些事<span style="flex:1"></span><span class="scope">共用</span></div>
+            <div class="hint man-note">✋ 手動中，下面勾的都不會執行</div>
+            <label><span class="cb" id="c-fight"></span>戰鬥 <span class="hint">移動・閃怪・撿東西</span></label>
+            <label><span class="cb" id="c-pick"></span>選卡 <span class="hint">技能・寶箱・擲骰</span></label>
+            <label><span class="cb" id="c-loop"></span>進關 <span class="hint">隊長→關卡→結算回城</span></label>
           </div>
+          <div class="scope">以下跟著設定檔</div>
           <div class="box" data-t="flow">
             <div class="l h">玩法 <span class="dd grow" id="flow">一直遊走</span></div>
             <div id="gatebox" style="display:none;gap:5px">
@@ -373,19 +380,9 @@ dl.faq dd{margin:2px 0 0;color:var(--muted);font-size:14px}
               </div>
             </div>
           </div>
-          <div class="det" id="det-long" data-t="long">
-            <div class="sum">長時間掛機</div>
-            <div class="dtb">
-              <label><span class="cb on"></span>分頁不被 Chrome 釋放</label>
-              <label><span class="cb on"></span>掛機時電腦保持清醒</label>
-              <label><span class="cb"></span>被最小化時自動還原視窗</label>
-              <label><span class="cb on"></span>重新整理後自動回到遊戲</label>
-              <span class="btn" data-t="popout">把遊戲移到獨立視窗</span>
-            </div>
-          </div>
-          <div class="det"><div class="sum">原地掛機細節</div></div>
+          <div class="det" id="det-idle" style="display:none"><div class="sum">原地掛機細節</div></div>
           <div class="det"><div class="sum">遊走細節</div></div>
-          <div class="hint">F8：全部停止</div>
+          <div class="hint">F8 或標題列「▶ 自動中／✋ 手動」：bot 全部停止／恢復，設定都不變</div>
         </div>
         <!-- 關卡 -->
         <div class="pg" data-pg="stage">
@@ -399,6 +396,7 @@ dl.faq dd{margin:2px 0 0;color:var(--muted);font-size:14px}
           </div>
           <label data-t="runs">打 <span class="num">0</span> 場後停止 <span class="hint">0＝不停</span></label>
           <label>結算後等 <span class="num">10</span> 秒再進關</label>
+          <label><span class="cb on"></span>自動繼續 <span class="hint">誤按暫停時</span></label>
         </div>
         <!-- 技能 -->
         <div class="pg" data-pg="skill">
@@ -408,6 +406,9 @@ dl.faq dd{margin:2px 0 0;color:var(--muted);font-size:14px}
           <div class="ta" id="ta-ban" data-t="sban" data-ph="例：緩速術"></div>
           <div class="h">核心技能 <span class="hint">出現就專注</span></div>
           <div class="ta" id="ta-foc" data-ph="例：神聖之光"></div>
+          <div class="h">每場最多用幾次 <span class="hint">0＝不用</span></div>
+          <table><thead><tr><th>單張</th><th>全部</th><th>放逐</th><th>專注</th></tr></thead>
+            <tbody><tr><td><span class="num">0</span></td><td><span class="num">0</span></td><td><span class="num">1</span></td><td><span class="num">1</span></td></tr></tbody></table>
         </div>
         <!-- 寶箱（v0.7.2 起神祇併入） -->
         <div class="pg" data-pg="chest">
@@ -417,6 +418,10 @@ dl.faq dd{margin:2px 0 0;color:var(--muted);font-size:14px}
             <div class="dtb">
               <div class="hint">🎯＝想要　✕＝不要</div>
               <div class="dg" id="dg"></div>
+              <div class="h">每場最多用幾次</div>
+              <table data-t="ptable"><thead><tr><th>單張</th><th>全部</th><th>放逐</th><th>專注</th></tr></thead>
+                <tbody><tr><td><span class="num">4</span></td><td><span class="num">0</span></td><td><span class="num">2</span></td><td><span class="num">1</span></td></tr></tbody></table>
+              <label data-t="huntall"><span class="cb on"></span>獵神時全部先給神祇 <span class="hint">拿到後才照各自的次數</span></label>
             </div>
           </div>
           <div class="det open">
@@ -430,20 +435,11 @@ dl.faq dd{margin:2px 0 0;color:var(--muted);font-size:14px}
               <div class="ta" data-ph="例：藥水"></div>
               <div class="h">想要的 <span class="hint">出現就專注</span></div>
               <div class="ta" data-ph="例：詠唱速度"></div>
+              <div class="h">每場最多用幾次</div>
+              <table><thead><tr><th>單張</th><th>全部</th><th>放逐</th><th>專注</th></tr></thead>
+                <tbody><tr><td><span class="num">2</span></td><td><span class="num">1</span></td><td><span class="num">2</span></td><td><span class="num">0</span></td></tr></tbody></table>
             </div>
           </div>
-          <div class="det"><div class="sum">👥 組隊擲骰</div></div>
-        </div>
-        <!-- 重抽 -->
-        <div class="pg" data-pg="perk">
-          <div class="hint">每場最多用幾次（0＝不用）。遊戲每場的總次數是共用的</div>
-          <table data-t="ptable"><thead><tr><th></th><th>單張</th><th>全部</th><th>放逐</th><th>專注</th></tr></thead>
-            <tbody>
-              <tr><td>神祇</td><td><span class="num">4</span></td><td><span class="num">0</span></td><td><span class="num">2</span></td><td><span class="num">1</span></td></tr>
-              <tr><td>寶箱</td><td><span class="num">2</span></td><td><span class="num">1</span></td><td><span class="num">2</span></td><td><span class="num">0</span></td></tr>
-              <tr><td>技能</td><td><span class="num">0</span></td><td><span class="num">0</span></td><td><span class="num">1</span></td><td><span class="num">1</span></td></tr>
-            </tbody></table>
-          <label data-t="huntall"><span class="cb on"></span>獵神時全部先給神祇 <span class="hint">拿到後才照上表</span></label>
         </div>
         <!-- 紀錄 -->
         <div class="pg" data-pg="log">
@@ -451,10 +447,41 @@ dl.faq dd{margin:2px 0 0;color:var(--muted);font-size:14px}
           <div class="stat" data-t="stats"><div><b>8</b>通關</div><div><b>1</b>死亡</div><div><b>1</b>放棄</div></div>
           <div class="hint">達成率 80%　平均 15:02　Lv 70　獵到神祇 0:48</div>
           <div class="hint">本次掛機掉落 14 件　裝備 9・卡片 5　平均每場 裝備 9.0・卡 5.0</div>
-          <div><span style="color:#d35400">傳說 1</span>　<span style="color:#2471a3">稀有 2</span>　<span style="color:#1e8449">優良 1</span>　<span style="color:#666">普通 5</span></div>
-          <div class="hint">稀有以上：<span style="color:#d35400">Necklace of Luck</span>、<span style="color:#2471a3">Ninja Suit of Luck</span></div>
+          <div><span style="color:#d35400">傳說 1</span>　<span style="color:#8e44ad">史詩 2</span>　<span style="color:#2471a3">稀有 2</span>　<span style="color:#666">普通 4</span></div>
+          <div class="det open" data-t="runcard"><div class="sum" style="font-weight:400"><span class="hint">11/15 11:58</span> 斐揚洞穴 <span style="color:#1e8449">通關</span> 15:11</div>
+            <div class="dtb" style="font-size:11px;gap:2px">
+              <div><span style="color:#8e44ad">史詩</span> <span class="hint">武器</span> Stiletto <b>VIT +2、AGI +2、爆擊 +2%</b></div>
+              <div><span style="color:#8e44ad">史詩</span> <span class="hint">飾品</span> Necklace <b>INT +2、VIT +2、HP +10</b></div>
+              <div><span style="color:#2471a3">稀有</span> <span class="hint">武器</span> Gladius <b>DEX +2、冷卻 +2%</b></div>
+              <div><span style="color:#666">普通</span> <span class="hint">鞋子</span> Shoes</div>
+              <div><span class="hint">卡片</span> Bongun・Nine Tail・Horong</div>
+            </div></div>
+          <div class="det"><div class="sum">👥 組隊擲骰</div></div>
           <div style="display:flex;gap:6px"><span class="btn" style="flex:1">匯出場次</span><span class="btn" style="flex:1">匯出掉落</span><span class="btn">清除</span></div>
           <div class="hint">每場結束自動記錄（存在這個瀏覽器）</div>
+        </div>
+        <!-- ⚙ -->
+        <div class="pg" data-pg="sys">
+          <div class="scope">共用（角色名稱除外）</div>
+          <div class="det open" data-t="account">
+            <div class="sum">帳號與自動登入</div>
+            <div class="dtb">
+              <label><span class="cb on"></span>重新整理後自動回到遊戲</label>
+              <label>角色 <span class="dd grow" id="charname"> </span></label>
+              <label>帳號 <span class="dd grow" id="acc"> </span></label>
+              <label>密碼 <span class="dd grow" id="pwd"> </span></label>
+              <div><span class="btn">儲存帳號密碼</span> <span class="hint" id="accst">尚未儲存</span></div>
+            </div>
+          </div>
+          <div class="det open" id="det-long">
+            <div class="sum">長時間掛機</div>
+            <div class="dtb">
+              <label><span class="cb on"></span>分頁不被 Chrome 釋放</label>
+              <label><span class="cb on"></span>掛機時電腦保持清醒</label>
+              <label><span class="cb"></span>被最小化時自動還原視窗</label>
+              <span class="btn" data-t="popout">把遊戲移到獨立視窗</span>
+            </div>
+          </div>
         </div>
       </div>
       <div class="st" id="pst">hook ✓✓　城鎮</div>
@@ -504,52 +531,59 @@ dl.faq dd{margin:2px 0 0;color:var(--muted);font-size:14px}
       body: '<p>在網址列輸入 <code>chrome://extensions</code>，把右上角的 <b>開發人員模式</b> 打開。</p><p>打開後上方會多出一排按鈕。</p>' },
     { g: 1, scene: 'ext', t: 'load', title: '載入未封裝項目',
       fx: (instant) => { $('#picker').classList.add('on'); const done = () => { $('#picker').classList.remove('on'); $('#newcard').classList.add('on'); }; instant || reduce ? done() : later(done, 1500); },
-      body: '<p>按 <b>載入未封裝項目</b>，選剛剛解壓的資料夾。</p><p>出現 <b>RO Survivors Bot 0.7.1</b> 的卡片，而且開關是藍色的，就裝好了。</p>' },
+      body: '<p>按 <b>載入未封裝項目</b>，選剛剛解壓的資料夾。</p><p>出現 <b>RO Survivors Bot</b> 的卡片，而且開關是藍色的，就裝好了。</p>' },
     { g: 1, scene: 'game', tab: 'main', t: 'pst', title: '打開遊戲，確認面板',
       body: '<p>到 <code>ro-survivors.com</code>，畫面左上會出現 <b>RO Bot</b> 面板，拖曳藍色標題列可以移動。</p><p>面板底部顯示 <b>hook ✓✓</b>，表示外掛有抓到遊戲。</p>',
       note: '如果遊戲頁面是在安裝前就開著的，要重新整理一次才會出現 hook ✓✓。' },
     { g: 2, scene: 'game', tab: 'main', t: 'pnew', title: '建一個設定檔',
       fx: (instant) => { const f = () => ($('#profsel').textContent = '服事-斐揚洞穴'); instant || reduce ? f() : later(f, 500); },
       body: '<p>按 <b>＋</b> 新增設定檔，用「職業-關卡」取名，例如 <b>服事-斐揚洞穴</b>。⧉ 複製、✎ 改名、🗑 刪除。</p><p>設定檔記住關卡、技能、寶箱、神祇等設定；換角色時切換設定檔就好。</p>',
-      note: '自動戰鬥、自動選卡、自動進關這幾個開關，以及打幾場、結算等待秒數，是所有設定檔共用的。' },
+      note: '每個分頁右上角會標「設定檔」或「共用」：共用的（自動做哪些事、打幾場、帳號…）切換設定檔不會變。' },
     { g: 2, scene: 'game', tab: 'stage', t: 'stagesel', title: '選關卡和難度',
       fx: () => ($('#stagesel').textContent = '斐揚洞穴'),
-      body: '<p>在 <b>關卡</b> 分頁選要刷的地圖，下面五條拉桿是遊戲的難度倍率（敵人數量 1–3.5、傷害 1–1.75、血量 1–2.5、速度 1–1.75、事件 1–2.5）。</p><p>「打 N 場後停止」填 0 代表一直打；「結算後等 N 秒」實際會隨機 ±20%。</p>' },
+      body: '<p>在 <b>關卡</b> 分頁選要刷的地圖，下面五條拉桿是遊戲的難度倍率（敵人數量 1–3.5、傷害 1–1.75、血量 1–2.5、速度 1–1.75、事件 1–2.5）。</p><p>「打 N 場後停止」填 0 代表一直打；「結算後等 N 秒」實際會隨機 ±20%；<b>自動繼續</b> 會在誤按暫停時自己按繼續。</p>' },
     { g: 2, scene: 'game', tab: 'skill', t: 'pri', title: '排技能優先序',
       fx: (instant) => { typeInto($('#ta-pri'), '神聖之光\n治癒術', instant); $('#ta-ban').textContent = instant ? '緩速術' : ''; if (!instant && !reduce) later(() => typeInto($('#ta-ban'), '緩速術'), 1300); else $('#ta-ban').textContent = '緩速術'; },
-      body: '<p>一行寫一個技能名稱，越上面越先選。</p><p><b>不要的技能</b>出現就放逐、絕不選；<b>核心技能</b>出現就專注，之後更常出現。</p>',
+      body: '<p>一行寫一個技能名稱，越上面越先選。</p><p><b>不要的技能</b>出現就放逐、絕不選；<b>核心技能</b>出現就專注，之後更常出現。最下面設定技能每場最多用幾次重抽、放逐、專注。</p>',
       note: '清單跟著設定檔走，一個設定檔＝一隻角色；換角色時切換設定檔就好。' },
     { g: 2, scene: 'game', tab: 'chest', t: 'deity0', title: '指定想要的神祇',
       fx: () => setDeity('堡壘之神', 'want'),
       body: '<p>在 <b>寶箱</b> 分頁最上面的 <b>🎯 神祇</b> 區塊，想要的神祇按 <b>🎯</b>（例如坦用的 <b>堡壘之神</b>），不想要的按 <b>✕</b>。</p><p>🎯 的神祇會最優先、出現就專注；開寶箱沒看到它時，會用單張重抽一直換神祇卡。</p>' },
+    { g: 2, scene: 'game', tab: 'chest', t: 'ptable', title: '分配重抽次數',
+      body: '<p>遊戲每場的 單張重抽、全部重抽、放逐、專注 次數是共用的。神祇、其他寶箱卡、技能各有一列「每場最多用幾次」，0＝不用。</p><p>保持勾選 <b>獵神時全部先給神祇</b>：拿到神祇之前次數全留給神祇，拿到後才照各自的次數。</p>' },
     { g: 2, scene: 'game', tab: 'chest', t: 'cpri', title: '設定寶箱怎麼選',
       fx: (instant) => typeInto($('#ta-chest'), '詠唱速度\n傳說', instant),
       body: '<p>同一頁的 <b>其他寶箱卡</b>：優先序會比對卡片上的文字，名稱、品質、部位、數值都可以寫，越上面越優先。</p><p>品質低於設定值就重抽；建議保持勾選 <b>盡量不換掉身上的裝備</b>，避免把已經拿到的神祇換掉。</p>' },
-    { g: 2, scene: 'game', tab: 'perk', t: 'ptable', title: '分配重抽次數',
-      body: '<p>遊戲每場的 單張重抽、全部重抽、放逐、專注 次數是共用的，這張表決定神祇、寶箱、技能各最多用幾次，0＝不用。</p><p>保持勾選 <b>獵神時全部先給神祇</b>：拿到神祇之前次數全留給神祇，拿到後才照表分配。</p>' },
     { g: 2, scene: 'game', tab: 'main', t: 'flow', title: '選玩法和巡邏條件',
       fx: (instant) => {
-        const a = () => { $('#flow').textContent = '先巡邏，再原地掛機'; $('#gatebox').style.display = 'grid'; };
+        const a = () => { $('#flow').textContent = '先巡邏，再原地掛機'; $('#gatebox').style.display = 'grid'; $('#det-idle').style.display = ''; };
         const b = () => { $('#leaveN').textContent = '10'; check('r-leave'); check('r-farm', false); check('c-skillOn'); $('#skillind').style.display = 'grid'; };
         if (instant || reduce) { a(); b(); } else { later(a, 300); later(b, 1500); }
       },
-      body: '<p>玩法選 <b>先巡邏，再原地掛機</b>：開局到處打怪、找精英怪開寶箱，勾的條件都做到後回到安全的原點掛機。</p><p>勾 <b>拿到🎯神祇</b>，設定獵不到的條件，例如 <b>開了 10 個寶箱</b>，再選 <b>離開這場重來</b> 或 <b>放棄神祇，照常掛機</b>。要練技能就再勾 <b>學到技能優先序</b>。</p>',
-      note: '一定要拿到神祇才玩，就選「離開這場重來」，並打開「自動進關」，沒抽到會自動開下一場。' },
-    { g: 2, scene: 'game', tab: 'main', t: 'popout', title: '長時間掛機設定',
-      pre: () => $('#det-long').classList.add('open'),
-      body: '<p>展開 <b>長時間掛機</b>：分頁不被釋放、電腦保持清醒、重新整理後自動回到遊戲，預設都是開的。</p><p>再按 <b>把遊戲移到獨立視窗</b>。</p>',
+      body: '<p>玩法選 <b>先巡邏，再原地掛機</b>：開局到處打怪、找精英怪開寶箱，勾的條件都做到後回到安全的原點掛機。</p><p>勾 <b>拿到🎯神祇</b>，設定獵不到的條件，例如 <b>開了 10 個寶箱</b>，再選 <b>離開這場重來</b> 或 <b>放棄神祇，照常掛機</b>。要練技能就再勾 <b>學到技能優先序</b>。</p><p>下面只會出現這個玩法用得到的細節（原地掛機、遊走）。</p>',
+      note: '一定要拿到神祇才玩，就選「離開這場重來」，並勾「進關」，沒抽到會自動開下一場。' },
+    { g: 2, scene: 'game', tab: 'sys', t: 'account', title: '帳號與自動登入',
+      fx: (instant) => { const f = () => { $('#charname').textContent = '阿服快打'; $('#acc').textContent = 'my_account'; $('#pwd').textContent = '••••••••'; $('#accst').textContent = '已儲存：my_account'; }; instant || reduce ? f() : later(f, 600); },
+      body: '<p>到 <b>⚙</b> 分頁的 <b>帳號與自動登入</b>：填 <b>角色</b>（跟選角畫面的名稱一樣），再填帳號密碼按 <b>儲存帳號密碼</b>。</p><p>遊戲改版、session 過期被登出時，bot 會自動登入、選這個角色、回到大廳。找不到角色就停在選角畫面，不會用別的角色進遊戲。</p>',
+      note: '帳號密碼存在擴充功能裡，遊戲網頁讀不到；密碼以明碼存在這台電腦的 Chrome 設定檔。登入失敗會停下，10 分鐘內不重試。角色名稱跟著設定檔，空白就自動記住上次按「開始遊戲」的角色。' },
+    { g: 2, scene: 'game', tab: 'sys', t: 'popout', title: '長時間掛機設定',
+      body: '<p>同一頁的 <b>長時間掛機</b>：分頁不被釋放、電腦保持清醒，預設都是開的。</p><p>再按 <b>把遊戲移到獨立視窗</b>。</p>',
       note: '遊戲分頁被切走、最小化或被其他視窗完全蓋住時，遊戲會停住。讓遊戲單獨一個視窗並且露出來。' },
-    { g: 3, scene: 'game', tab: 'main', t: 'switches', title: '打開三個開關，開始跑',
+    { g: 3, scene: 'game', tab: 'main', t: 'switches', title: '勾「自動做哪些事」，開始跑',
       fx: (instant) => {
         const ids = ['c-fight', 'c-pick', 'c-loop'];
         if (instant || reduce) { ids.forEach((id) => check(id)); $('#pst').textContent = 'hook ✓✓　巡邏中．獵神'; return; }
         ids.forEach((id, i) => later(() => check(id), 250 + i * 450));
         later(() => ($('#pst').textContent = 'hook ✓✓　巡邏中．獵神'), 1700);
       },
-      body: '<p>設定都好了再打開：</p><p><b>自動戰鬥</b>：移動、閃怪、撿東西。<br><b>自動選卡</b>：升級技能、寶箱、組隊擲骰。<br><b>自動進關</b>：找隊長 → 選關 → 出發 → 結算回城 → 下一場。</p>',
-      note: '隨時按 F8，三個開關會一起關掉。' },
+      body: '<p>回到 <b>玩法</b> 分頁，最上面 <b>自動做哪些事</b> 勾起來：</p><p><b>戰鬥</b>：移動、閃怪、撿東西。<br><b>選卡</b>：升級技能、寶箱、組隊擲骰。<br><b>進關</b>：找隊長 → 選關 → 出發 → 結算回城 → 下一場。</p>' },
+    { g: 3, scene: 'game', tab: 'main', t: 'power', title: '要自己操作時：切成手動',
+      fx: (instant) => { const f = () => { $('#rp').classList.add('manual'); $('#pw').textContent = '✋ 手動'; $('#pst').textContent = '✋ 手動模式：bot 不操作'; }; instant || reduce ? f() : later(f, 300); },
+      body: '<p>按標題列的 <b>▶ 自動中</b>（或 F8），變成紅色的 <b>✋ 手動</b>：戰鬥、選卡、進關、自動登入全部停止，角色交給你。</p><p>勾選狀態都保留，再按一次就照原本的設定繼續，不用一個個重新打開。</p>',
+      note: '手動時「自動做哪些事」會變灰並註明不會執行；重新整理頁面後也維持手動。' },
     { g: 3, scene: 'game', tab: 'log', t: 'reload', title: '看紀錄、更新外掛',
-      body: '<p><b>紀錄</b> 分頁會統計通關、死亡、放棄、平均等級和獵到神祇的時間，可以匯出 CSV（Excel 直接開）。</p><p>掉落在結算畫面讀取：每場記下拿到的裝備、卡片和品質，以及關卡中紫色 ? 是哪些怪掉的；稀有以上的物品會另外列出來。</p><p>外掛出新版時，用新檔案覆蓋資料夾，再按面板右上的 <b>⟳</b>，不用重新整理頁面。</p>',
+      fx: () => { $('#rp').classList.remove('manual'); $('#pw').textContent = '▶ 自動中'; },
+      body: '<p><b>紀錄</b> 分頁會統計通關、死亡、放棄、平均等級和獵到神祇的時間，可以匯出 CSV（Excel 直接開）。</p><p>每場一張小卡：結算拿到的裝備（品質、部位、數值）和卡片，以及關卡中紫色 ? 是哪些怪掉的。組隊擲骰規則也在這頁。</p><p>外掛出新版時，用新檔案覆蓋資料夾，再按面板右上的 <b>⟳</b>，不用重新整理頁面。</p>',
       note: '如果更新說明提到 hook.js 或權限有改，要先到 chrome://extensions 按 ↻，再重新整理遊戲頁面。' },
   ];
   const GROUPS = { 1: '安裝', 2: '設定', 3: '開跑' };
@@ -589,7 +623,7 @@ dl.faq dd{margin:2px 0 0;color:var(--muted);font-size:14px}
     cb.scrollIntoView({ block: 'nearest' });
     $('#prev').disabled = i === 0; $('#next').disabled = i === steps.length - 1;
 
-    const target = s.t === 'deity0' ? $('#dg .seg[data-d="堡壘之神"] .want') : s.t === 'pst' ? $('#pst') : $(`[data-t="${s.t}"]`, scenesEl);
+    const target = s.t === 'deity0' ? $('#dg .seg[data-d="堡壘之神"] .want') : s.t === 'pst' ? $('#pst') : s.t === 'reload' ? $('[data-t="runcard"]', scenesEl) : $(`[data-t="${s.t}"]`, scenesEl);
     const doFx = (instant) => { s.fx?.(instant); target?.classList.add('hl'); };
     if (!target) { doFx(true); return; }
     if (!animate || reduce) { moveCursor(target, false); doFx(true); return; }
