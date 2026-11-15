@@ -6,7 +6,7 @@
   if (window.__roBot?.destroy) { try { window.__roBot.destroy(); } catch {} }
   const H = window.__roHook || (window.__roHook = { run: null, lobby: null, runs: 0, runSeq: 0, drops: 0, stuck: 0 });
   const BOT = (window.__roBot = {
-    version: '0.7.6',
+    version: '0.7.9',
     get run() { return H.run; },
     get lobby() { return H.lobby; },
     get runs() { return H.runs; }, set runs(v) { H.runs = v; },
@@ -66,7 +66,7 @@
     sweep: { on: true, every: 25, minValue: 15, maxSec: 8, radius: 900 }, // 原地模式定時掃一圈撿經驗
     chestPick: 'smart',    // smart（優先序→品質）| first | random
     chestPriority: [],     // 寶箱優先序：比對卡片文字（品質/名稱/部位/數值）
-    priority: {},          // { [classId]: ['技能名', ...] }
+    priority: [],          // ['技能名', ...]（設定檔＝一隻角色，不分職業；v0.7.7 起）
     // 寶箱策略（重抽 / 放逐 / 專注 次數是整場共用的，和升級選技能同一個池）
     chestMinQ: '史詩',      // 最低可接受品質；低於此且沒命中優先序 → 嘗試重抽
     chestUse: { reroll_card: 2, reroll: 1, banish: 2, focus: 2 }, // 每場最多用在寶箱上的次數
@@ -90,8 +90,8 @@
     skillPerks: true,
     skillUse: { reroll_card: 3, reroll: 1, banish: 2, focus: 0 },
     skillOkTop: 0,         // 命中優先序前 N 名才算滿意（0 = 命中任何一個）
-    skillBanish: {},       // { [classId]: [...] }
-    skillFocus: {},        // { [classId]: [...] }
+    skillBanish: [],
+    skillFocus: [],
     // 組隊掉落擲骰：off 自己按 / pass 全部放棄 / greed 全部 Greed / need 全部 Need / rule 依規則
     roll: { mode: 'off', needList: [], passList: [], needQ: '傳說', card: 'rule', other: 'greed' },
     tab: 'main',
@@ -105,7 +105,6 @@
     c.sweep = { ...DEFAULT_CFG.sweep, ...(c.sweep || {}) };
     c.chestUse = { ...DEFAULT_CFG.chestUse, ...(c.chestUse || {}) };
     c.skillUse = { ...DEFAULT_CFG.skillUse, ...(c.skillUse || {}) };
-    c.skillBanish ||= {}; c.skillFocus ||= {}; c.priority ||= {};
     c.huntPhase = { ...DEFAULT_CFG.huntPhase, ...(c.huntPhase || {}) };
     c.deity ||= {}; c.deityUse = { ...DEFAULT_CFG.deityUse, ...(c.deityUse || {}) };
     c.diff = Array.isArray(c.diff) ? c.diff : [...DEFAULT_CFG.diff];
@@ -137,6 +136,11 @@
   function buildCfg() {
     // v0.6.4 以前的「開局獵神 → 掛機」轉成「開局巡邏」的神祇條件
     for (const pf of Object.values(STORE.profiles)) {
+      // v0.7.7：技能設定原本依職業分開存（{ acolyte: [...] }），改成每個設定檔一份（設定檔＝一隻角色）；舊資料取第一份有內容的
+      for (const k of ['priority', 'skillBanish', 'skillFocus']) {
+        const v = pf[k];
+        if (v !== undefined && !Array.isArray(v)) pf[k] = (v && typeof v === 'object') ? (Object.values(v).find((a) => Array.isArray(a) && a.length) || []) : [];
+      }
       if (!pf.gate && pf.huntPhase) pf.gate = { on: !!pf.huntPhase.on, deity: true, after: pf.huntPhase.after || 'idle' };
       // v0.7：三處的「每場最多用幾次」合併成一張表
       if (!pf.perks) {
@@ -220,7 +224,7 @@
   const G = () => cfg.gate || {};
   const deityGoal = () => !!G().on && !!G().deity && cfg.deityOn && deityWant().length > 0;
   // 技能條件直接用「技能」分頁的優先序前 N 個（依目前職業），不用另外輸入
-  const gateSkills = () => (cfg.priority[classId(BOT.run)] || []).filter(Boolean).slice(0, Math.max(1, G().skillTop || 1));
+  const gateSkills = () => cfg.priority.filter(Boolean).slice(0, Math.max(1, G().skillTop || 1));
   const skillGoal = () => !!G().on && !!G().skillOn && gateSkills().length > 0;
   const huntActive = deityGoal; // 有神祇目標時才「獵神」（全力開寶箱、重抽給神祇、失敗條件）
   // 是否已裝備目標神祇：直接讀遊戲的裝備欄（run.runItems.slots + runItemName 取中文名），不靠 bot 自己記
@@ -601,12 +605,6 @@
   }
 
   // ───────────────────────── 5. Card picks (skills / chest) ─────────────────────────
-  function classId(run) {
-    const c = run?.classDef;
-    const id = c && (c.id || c.name || c.job);
-    if (id) H.lastClass = id; // 在城鎮時沿用上一個職業（顯示/設定用）
-    return id || H.lastClass || 'default';
-  }
 
   // ── 寶箱策略 ──
   // 卡片文字：品質｜(新！)｜名稱 (+精煉)｜部位｜數值｜(取代 X)｜(★ 專注)
@@ -748,14 +746,13 @@
       if (en && key && !SKMAP[key]) { SKMAP[key] = toId(en); learned = true; }
     }
     if (learned) try { localStorage.setItem('roBot.skillMap', JSON.stringify(SKMAP)); } catch {}
-    const cls = classId(run);
-    const pri = cfg.priority[cls] || [];
+    const pri = cfg.priority;
     return perkTick(run, cards, {
       tag: 'skill', used: BOT.skillUsed, limit: limitFor('skill'),
       // 技能只比對「技能名稱」：說明文字常提到別的技能（例如緩速術的說明寫著「神聖之光…傷害 +30%」），
       // 用整張卡比對會誤判成命中神聖之光（v0.4.8 修正）
       textOf: (c) => [c.querySelector('.pk-name')?.textContent, c.querySelector('.pk-ribbon')?.textContent].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim() || cardText(c),
-      banish: cfg.skillBanish[cls], focus: cfg.skillFocus[cls],
+      banish: cfg.skillBanish, focus: cfg.skillFocus,
       onPick: (best) => { BOT.pendingSkill = { name: cards[best.i]?.querySelector('.pk-name')?.textContent.trim() || best.t, snap: skillSnap(run), at: Date.now() }; },
       score: (t) => {
         const name = t; // card text contains the skill name
@@ -763,7 +760,7 @@
         // 滿意 = 命中優先序前 N 名（N=0 表示命中任何一個都算）
         const ok = p >= 0 && (!cfg.skillOkTop || p < cfg.skillOkTop);
         // 放逐名單裡的技能：放逐次數用完（或沒開重抽/放逐）時也絕不選，除非三張都是（v0.6.6 修正）
-        const banned = hit(cfg.skillBanish[cls], name) >= 0;
+        const banned = hit(cfg.skillBanish, name) >= 0;
         const sc = (p >= 0 ? (100 - p) * 100 : (t.includes('新！') ? 0 : 1)) - (banned ? 100000 : 0);
         return { sc, ok: !banned && (ok || !pri.length) };
       },
@@ -909,6 +906,7 @@
       result, why: rs.leaveWhy || '', title,
       seq: H.runSeq,
       drops: (rs.drops || []).map((d) => `${d.q ? d.q + ' ' : ''}${d.name}`),
+      items: (rs.drops || []).map(itemOf), lootNote: rs.lootNote || '',
       ...mysteryOf(run),
       mode: phase() === 'normal' ? cfg.mode : 'hunt',
     };
@@ -933,6 +931,55 @@
     try { for (const [id, [a, b]] of run.dropsBy || []) { g += a || 0; c += b || 0; src.push(`${MOBN[id] || id} ${a || 0}${b ? '+' + b + '卡' : ''}`); } } catch {}
     return g + c ? { myst: [g, c], src: src.join('、') } : {};
   }
+  // v0.7.8 部位：結算圖片 items/<編號>.png 的編號，照 RO 編號區間判斷（對過遊戲物品資料庫 222 件全對）；素質：名稱後綴 of Dexterity → DEX
+  const SLOT_R = [[1100, 1999, '武器'], [13000, 13999, '武器'], [16000, 16999, '武器'], [28600, 28699, '武器'], [2100, 2199, '盾牌'], [28900, 28999, '盾牌'],
+    [2686, 2686, '頭飾'], [2200, 2299, '頭飾'], [5000, 5999, '頭飾'], [18000, 19999, '頭飾'], [49000, 49999, '頭飾'],
+    [2300, 2399, '護甲'], [2400, 2499, '鞋子'], [2500, 2599, '披肩'], [2600, 2799, '飾品'], [22800, 22899, '飾品']];
+  const slotOf = (id) => (SLOT_R.find(([a, b]) => id >= a && id <= b) || [])[2] || '';
+  const STAT = { Strength: 'STR', Agility: 'AGI', Vitality: 'VIT', Intelligence: 'INT', Dexterity: 'DEX', Luck: 'LUK' };
+  const splitName = (n) => { const m = (n || '').match(/^(.*) of (Strength|Agility|Vitality|Intelligence|Dexterity|Luck)$/); return m ? [m[1], STAT[m[2]]] : [n || '', '']; };
+  const itemOf = (d) => ({ q: d.q || '', name: d.name, kind: d.kind, slot: d.slot || '', stat: d.stat ?? splitName(d.name)[1], ...(d.aff ? { aff: d.aff } : {}), ...(d.refine ? { refine: d.refine } : {}) });
+  // 舊紀錄只有 "品質 名稱" 字串
+  const itemsOfLog = (e) => e.items || (e.drops || []).map((x) => {
+    const q = QUALITY.find((k) => x.startsWith(k + ' ')), name = q ? x.slice(q.length + 1) : x;
+    return itemOf({ q: q || '', name, kind: / Card$/.test(name) ? '卡片' : q ? '裝備' : '蛋' });
+  });
+  // v0.7.9 物品數值：結算畫面只有名稱，數值在伺服器回應 POST op {op:"loot"|"gclaim"} 的 granted.gear[].affixes。
+  // 只讀回應副本（clone），不改請求、不改回應。遊戲每次呼叫時才取 window.fetch，所以熱更新後接上即可，不用刷新頁面。
+  // 包裝只裝一次，處理函式放 H.onLoot（熱更新時換成新版）
+  const LOOTRAW_KEY = 'roBot.lootRaw';
+  if (!H.fetchWrapped) {
+    H.fetchWrapped = true;
+    const orig = window.fetch;
+    window.fetch = function (input, init) {
+      const p = orig.apply(this, arguments);
+      try {
+        const op = typeof init?.body === 'string' && init.body.match(/"op":"(loot|gclaim)"/)?.[1];
+        if (op) p.then((r) => r.clone().json()).then((j) => H.onLoot?.(op, j)).catch(() => {});
+      } catch {}
+      return p;
+    };
+  }
+  H.onLoot = (op, j) => {
+    const g = j?.granted;
+    if (!g || typeof g !== 'object') return;
+    const raw = { at: Date.now(), seq: H.runSeq, op, gear: g.gear || [], cards: g.cards || [], eggs: g.eggs || [], mail: !!g.mail };
+    BOT.rs.lootRaw = raw;
+    try { const a = JSON.parse(localStorage.getItem(LOOTRAW_KEY) || '[]'); a.push(raw); localStorage.setItem(LOOTRAW_KEY, JSON.stringify(a.slice(-10))); } catch {}
+    log('結算回應', op, raw.gear.length, '件裝備', JSON.stringify(raw.gear).slice(0, 300));
+  };
+  // affixes 格式未確認前盡量通用：[{stat,v}] / {dex:3} / ['dex', ...]
+  const fmtAff = (a) => {
+    if (!a) return '';
+    const list = Array.isArray(a) ? a : Object.entries(a).map(([k, v]) => ({ k, v }));
+    return list.map((x) => {
+      if (x == null || typeof x !== 'object') return String(x ?? '').toUpperCase();
+      const vals = Object.values(x);
+      const k = x.stat ?? x.k ?? x.key ?? x.id ?? x.type ?? vals.find((v) => typeof v === 'string');
+      const v = x.v ?? x.value ?? x.val ?? x.n ?? x.amount ?? vals.find((v) => typeof v === 'number');
+      return `${String(k ?? '').toUpperCase()}${v != null ? ' +' + (+v.toFixed?.(3) || v) : ''}`;
+    }).filter(Boolean).join('、');
+  };
   function captureServerLoot(run) {
     if (BOT.rs.lootDone) return;
     const box = $('#go-server-loot');
@@ -940,19 +987,29 @@
     const imgs = $$('img', box), note = box.innerText.trim();
     if (!imgs.length && (!note || /分配|等待|Repartiendo|Esperando|Distribut|Waiting/i.test(note))) return; // 還在分配
     BOT.rs.lootDone = true;
+    if (!imgs.length) BOT.rs.lootNote = note; // 沒掉落／寄到郵差／伺服器沒回應
     const stage = cfg.loop ? cfg.stage : run.stageId || '';
     const got = imgs.map((i) => {
       const t = (i.title || '').trim(), m = t.match(/^(.*) \(([^()]+)\)$/);
       if (i.classList.contains('cardimg')) return { name: t, q: '', kind: '卡片' };
-      return m ? { name: m[1], q: m[2], kind: '裝備' } : { name: t, q: '', kind: '蛋' };
+      const id = +((i.getAttribute('src') || '').match(/items\/(\d+)\./)?.[1] || 0);
+      return m ? { name: m[1], q: m[2], kind: '裝備', slot: slotOf(id), stat: splitName(m[1])[1], id } : { name: t, q: '', kind: '蛋' };
     }).filter((d) => d.name).map((d) => ({ at: Date.now(), seq: H.runSeq, stage, stats: '', ...d }));
-    if (!got.length) { log('結算掉落：', note || '(無)'); return; }
+    // 對上伺服器回應：畫面裝備的順序＝granted.gear 的順序
+    const rg = BOT.rs.lootRaw?.seq === H.runSeq ? BOT.rs.lootRaw.gear : null;
+    if (rg) { let k = 0; for (const d of got) if (d.kind === '裝備') { const x = rg[k++]; if (x) { d.aff = fmtAff(x.affixes); if (x.refine) d.refine = x.refine; } } }
+    if (!got.length) {
+      log('結算掉落：', note || '(無)');
+      const L = loadLog(), e = L.findLast?.((x) => x.seq === H.runSeq && Date.now() - x.at < 300000);
+      if (e) { e.lootNote = note; saveLog(L); }
+      return;
+    }
     (BOT.rs.drops ||= []).push(...got);
     const a = loadDrops(); a.push(...got); saveDrops(a);
     log('結算掉落', got.length, got.map((d) => `${d.q} ${d.name}`).join('、'));
     // 紀錄可能已經先寫了（結算標題比物品早出現）→ 補上這場的掉落
     const L = loadLog(), e = L.findLast?.((x) => x.seq === H.runSeq && Date.now() - x.at < 300000);
-    if (e) { e.drops = BOT.rs.drops.map((d) => `${d.q ? d.q + ' ' : ''}${d.name}`); saveLog(L); }
+    if (e) { e.drops = BOT.rs.drops.map((d) => `${d.q ? d.q + ' ' : ''}${d.name}`); e.items = BOT.rs.drops.map(itemOf); saveLog(L); }
     if (cfg.tab === 'log') renderLog(true);
   }
   function captureReveal(run) {
@@ -976,8 +1033,8 @@
   }
   function exportDrops() {
     const a = loadDrops();
-    const head = ['時間', '關卡', '種類', '品質', '名稱', '數值'];
-    const rows = a.map((e) => [new Date(e.at).toLocaleString(), e.stage, e.kind, e.q, e.name, e.stats]);
+    const head = ['時間', '關卡', '種類', '品質', '部位', '素質', '名稱', '數值'];
+    const rows = a.map((e) => [new Date(e.at).toLocaleString(), e.stage, e.kind, e.q, e.slot || '', e.aff || e.stat || splitName(e.name)[1], e.name, e.stats]);
     const csv = '\ufeff' + [head, ...rows].map((r) => r.map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
     const link = document.createElement('a'); link.href = url; link.download = `ro-bot-drops-${new Date().toISOString().slice(0, 10)}.csv`; link.click();
@@ -1019,17 +1076,30 @@
     const byQ = {}; ds.forEach((d) => d.q && (byQ[d.q] = (byQ[d.q] || 0) + 1));
     const curRun = (BOT.rs.drops || []).length;
     const sessRuns = sess.filter((e) => e.myst), avgN = (i) => avg(sessRuns.map((e) => e.myst[i]))?.toFixed(1) ?? '-';
-    const good = loadDrops().filter((d) => ['傳說', '史詩', '稀有'].includes(d.q)).slice(-30).reverse(); // 稀有以上（全部紀錄）
-    const cards = [...new Set(loadDrops().filter((d) => d.kind === '卡片').map((d) => d.name))];
-    const line = (d) => { const t = new Date(d.at); const hm = `${t.getMonth() + 1}/${t.getDate()} ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
-      return `<div style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span class="hint">${hm}</span> <span style="color:${QCOL[d.q] || '#333'}">${d.q || ''}</span> ${d.name} <span class="hint">${d.kind}</span></div>`; };
+    // 每場一張小卡（最新在上）：裝備一件一行「品質 部位 名稱 +素質」、卡片一行；最近 3 場展開
+    const hm = (at) => { const t = new Date(at); return `${t.getMonth() + 1}/${t.getDate()} ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`; };
+    const runCard = (e, open) => {
+      const it = itemsOfLog(e), qi = (x) => { const i = QUALITY.indexOf(x.q); return i < 0 ? 99 : i; };
+      const gear = it.filter((x) => x.kind === '裝備').sort((x, y) => qi(x) - qi(y));
+      const cards = it.filter((x) => x.kind === '卡片').map((x) => x.name.replace(/ Card$/, ''));
+      const eggs = it.filter((x) => x.kind === '蛋').length;
+      const col = e.result === '死亡' ? '#c0392b' : e.result === '放棄' ? '#b9770e' : e.result === '通關' ? '#1e8449' : '#666';
+      const bq = gear[0]?.q;
+      const body = gear.map((x) => { const [base] = splitName(x.name);
+        return `<div style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="color:${QCOL[x.q] || '#333'}">${x.q}</span> <span class="hint">${x.slot || ''}</span> ${x.refine ? '+' + x.refine + ' ' : ''}${base}${x.aff ? ` <b>${x.aff}</b>` : x.stat ? ` <b>+${x.stat}</b>` : ''}</div>`; }).join('')
+        + (cards.length ? `<div style="font-size:11px"><span class="hint">卡片</span> ${cards.join('・')}</div>` : '')
+        + (eggs ? `<div style="font-size:11px"><span class="hint">寵物蛋</span> ×${eggs}</div>` : '')
+        || `<div class="hint">${e.lootNote || (e.myst ? '沒抓到結算物品' : '沒有掉落')}</div>`;
+      return `<details class="run"${open ? ' open' : ''}><summary style="font-size:11px"><span class="hint">${hm(e.at)}</span> ${(e.stage || '').slice(0, 6)} <span style="color:${col}">${e.result}</span> ${mmss(e.time)}
+        <span style="float:right;color:${QCOL[bq] || '#666'}">${e.myst ? `裝備 ${e.myst[0]}・卡 ${e.myst[1]}` : it.length ? `${it.length} 件` : ''}</span></summary>
+        <div style="padding:2px 0 4px 10px">${body}${e.src ? `<div class="hint" style="font-size:10px">? 來源：${e.src}</div>` : ''}</div></details>`;
+    };
+    const recent = a.slice(-20).reverse();
     const dropHtml = `<div class="sub" style="gap:3px">
       <div><b>本次掛機掉落</b> ${ds.length} 件　<span class="hint">這一場 ${curRun} 件</span></div>
       <div class="hint">${Object.entries(byKind).map(([k, v]) => `${k} ${v}`).join('　') || '還沒有掉落（結算時讀取）'}${sessRuns.length ? `　平均每場 裝備 ${avgN(0)}・卡 ${avgN(1)}` : ''}</div>
       <div>${QUALITY.filter((q) => byQ[q]).map((q) => `<span style="color:${QCOL[q] || '#333'}">${q} ${byQ[q]}</span>`).join('　')}</div>
-      ${good.length ? `<div class="hint">稀有以上</div><div style="max-height:110px;overflow:auto">${good.map(line).join('')}</div>` : ''}
-      ${cards.length ? `<div class="hint">卡片 ${cards.length} 種：${cards.join('、')}</div>` : ''}
-      <details><summary class="hint">本次掛機全部</summary><div style="max-height:150px;overflow:auto">${ds.slice(-60).reverse().map(line).join('')}</div></details>
+      ${recent.length ? `<div class="hint">每場掉落（點標題展開／收合）</div><div style="max-height:260px;overflow:auto">${recent.map((e, i) => runCard(e, i < 3)).join('')}</div>` : ''}
     </div>`;
     const stalls = loadStalls().filter((x) => x.at >= H.sessionAt);
     const stallHtml = stalls.length ? `<div class="sub" style="gap:2px;background:#fff4e5">
@@ -1116,12 +1186,62 @@
   BOT.cleanup.push(() => document.removeEventListener('visibilitychange', onVisibility));
 
   // 自動登入：標題畫面「開始遊戲！」(#sp-play) → 角色選擇 (#slots .slot，選上次的角色) → #btn-play → 大廳選擇在 lobbyTick 處理
-  function rememberChar() {
-    const nm = $('#hud-name')?.textContent.trim();
-    if (nm && nm !== H.lastChar) { H.lastChar = nm; try { localStorage.setItem('roBot.lastChar', nm); } catch {} }
+  // v0.7.9：角色名稱改在選角畫面按「開始遊戲」時記（選中的 .slot-name），存進目前設定檔（設定檔＝一隻角色）。
+  // 以前讀 #hud-name，那裡有時是職業名（例：Espadachín）、有時是「名稱 職業」，對不上選角畫面 → 選到預設的第一隻角色
+  const slotName = (sl) => $('.slot-name', sl)?.textContent.trim() || '';
+  function onPlayClick(ev) {
+    if (!ev.target?.closest?.('#btn-play')) return;
+    const nm = slotName($('#slots .slot.selected'));
+    if (!nm) return;
+    H.lastChar = nm; try { localStorage.setItem('roBot.lastChar', nm); } catch {}
+    if (!(cfg.char || '').trim()) { cfg.char = nm; save(); render(); log('記住角色', nm, '→ 設定檔', STORE.activeProfile); } // 使用者自己填的不覆蓋
+  }
+  document.addEventListener('click', onPlayClick, true);
+  BOT.cleanup.push(() => document.removeEventListener('click', onPlayClick, true));
+  // v0.7.9 帳號密碼自動登入：登入狀態被清掉（遊戲改版、session 過期）時，標題畫面變成「建立帳號／進入」。
+  // 關掉「現在需要帳號」對話框 → 切到「進入」→ 填帳號密碼 → 按進入。10 分鐘內最多試一次（跨重新整理也算），失敗就停下提示，避免一直試錯被鎖
+  const LOGIN_TRY_KEY = 'roBot.loginTried';
+  function setInput(el, v) {
+    const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+    set.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  function accountTick() {
+    const lf = $('#sp-login'), rf = $('#sp-register');
+    if (!visible(lf) && !visible(rf)) { BOT.loginErr = null; return false; }
+    if (!BOT.credUser) {
+      // 頁面剛載入時擴充功能連線可能還沒好 → 每 5 秒再問一次
+      if (Date.now() - (BOT.credAt || 0) > 5000) { BOT.credAt = Date.now(); extMsg({ type: 'cred:get' }, (r) => { if (r?.user) BOT.credUser = r.user; }); }
+      BOT.loginErr = '已被登出：到「控制 → 長時間掛機」填帳號密碼才能自動登入'; return true;
+    }
+    const err = lf && $('.sp-error', lf)?.textContent.trim();
+    if (err) { BOT.loginErr = '自動登入失敗：' + err; return true; }
+    let last = 0; try { last = +sessionStorage.getItem(LOGIN_TRY_KEY) || 0; } catch {}
+    if (Date.now() - last < 600000) { BOT.loginErr ||= '自動登入已試過，10 分鐘內不重試'; return true; }
+    const dlg = $('#npc-dialog');
+    if (visible(dlg) && /需要帳號|hace falta una cuenta|need an account/i.test($('#npc-name')?.textContent || '')) {
+      // 有「我已經有帳號」就按它；只有「建立我的帳號」時按了只是切到註冊頁，之後再切到「進入」
+      const btns = $$('button', dlg).filter(visible);
+      const pb = btns.find((b) => /已經有帳號|已有帳號|Ya tengo cuenta|already have/i.test(b.innerText)) || btns.find((b) => b.classList.contains('primary'));
+      if (pb) { log('自動登入：關閉「需要帳號」'); clickBtn(pb, rnd(800, 1200)); }
+      return true;
+    }
+    if (!visible(lf)) { const tab = $('[data-sp-tab="login"]'); if (tab) { log('自動登入：切到「進入」'); clickBtn(tab, rnd(600, 900)); } return true; }
+    if (BOT.loginBusy) return true;
+    BOT.loginBusy = true; wait(5000);
+    extMsg({ type: 'cred:get', full: true }, (r) => {
+      BOT.loginBusy = false;
+      const c = r?.cred, u = $('input[name="username"]', lf), pw = $('input[name="password"]', lf), sub = $('button[type="submit"]', lf);
+      if (!c?.u || !c?.p || !u || !pw || !sub) { BOT.loginErr = '自動登入：讀不到帳號密碼或登入表單'; return; }
+      try { sessionStorage.setItem(LOGIN_TRY_KEY, String(Date.now())); } catch {}
+      setInput(u, c.u); setInput(pw, c.p);
+      log('自動登入：帳號', c.u);
+      setTimeout(() => { sub.click(); setTimeout(() => { try { setInput(pw, ''); } catch {} }, 3000); }, rnd(500, 900));
+    });
+    return true;
   }
   function loginTick() {
     if (!ready()) return;
+    if (accountTick()) return;
     // 廣場 5 分鐘沒動作被登出：「你已 5 分鐘沒有動作…」→ 按「我知道了」，再照常按開始遊戲
     // （維護前伺服器踢人也是這個提示，標題「暫離」，按鈕「接受」）
     if (/沒有動作|已離開遊戲|sin tocar|inactiv/i.test(document.body.innerText)) {
@@ -1130,8 +1250,15 @@
     }
     const play = $('#btn-play');
     if (visible(play)) {
-      let want = H.lastChar; try { want ||= localStorage.getItem('roBot.lastChar'); } catch {}
-      const slot = want && $$('#slots .slot').find((s) => $('.slot-name', s)?.textContent.trim() === want);
+      let want = (cfg.char || '').trim() || H.lastChar; try { want ||= localStorage.getItem('roBot.lastChar'); } catch {}
+      const slots = $$('#slots .slot').filter((sl) => slotName(sl));
+      // 完全相符；舊版存的「名稱 職業」取前段比對
+      const slot = want && (slots.find((sl) => slotName(sl) === want) || slots.find((sl) => want.startsWith(slotName(sl) + ' ')));
+      if (want && !slot) {
+        if (BOT.loginWarn !== want) { BOT.loginWarn = want; log('自動登入：找不到角色', want, '→ 停在選角畫面，請手動選'); }
+        return; // 寧可停下也不要用錯角色進遊戲
+      }
+      BOT.loginWarn = null;
       if (slot && !slot.classList.contains('selected')) return void clickBtn(slot, rnd(600, 1000));
       if (!play.disabled) { log('自動登入：開始遊戲', want || '(目前選取的角色)'); return void clickBtn(play, rnd(3000, 4000)); }
       return;
@@ -1245,20 +1372,20 @@
     } catch (e) { log('tick error', e); }
   }, 50));
   BOT.timers.push(setInterval(render, 500));
-  BOT.timers.push(setInterval(() => { try { careTick(); rememberChar(); } catch {} }, 30000));
+  BOT.timers.push(setInterval(() => { try { careTick(); } catch {} }, 30000));
   setTimeout(() => { try { careTick(); } catch {} }, 1500);
 
   // ───────────────────────── 9. Panel UI ─────────────────────────
   // 分頁：控制 / 關卡 / 選卡 / 寶箱；內容區最高 = 視窗高度，超出可捲動；狀態列固定在底部
-  let panel, lastCls = null;
+  let panel;
   const listVal = (a) => (a || []).join('\n');
   const parseList = (v) => v.split('\n').map((x) => x.trim()).filter(Boolean);
 
   // ── 宣告式綁定 ──
-  // data-k="路徑"：checkbox / number / select / range 直接對應 cfg 的值（路徑可含 @cls＝目前職業）
+  // data-k="路徑"：checkbox / number / select / range 直接對應 cfg 的值
   // data-list="路徑"：textarea 一行一個
   // data-show="條件"：路徑為真才顯示；"路徑=值" 比對；前面加 ! 反向
-  const pathOf = (p) => p.replace('@cls', classId(BOT.run)).split('.');
+  const pathOf = (p) => p.split('.');
   function getP(p) { return pathOf(p).reduce((o, k) => (o == null ? undefined : o[k]), cfg); }
   function setP(p, v) {
     const ks = pathOf(p); let o = cfg;
@@ -1378,7 +1505,14 @@
       ${CHK('noDiscard', '分頁不被 Chrome 釋放')}
       ${CHK('keepAwake', '掛機時電腦保持清醒', '螢幕不關、不自動鎖定')}
       ${CHK('autoRestore', '被最小化時自動還原視窗')}
-      ${CHK('autoLogin', '重新整理後自動回到遊戲', '開始遊戲→上次角色→大廳')}
+      ${CHK('autoLogin', '重新整理後自動回到遊戲', '開始遊戲→選角色→大廳')}
+      <label data-show="autoLogin">　角色名稱 <input type="text" data-k="char" style="width:110px"></label>
+      <div class="hint" data-show="autoLogin">　跟著設定檔走，要跟選角畫面的名稱一樣；空白＝自動記住上次按「開始遊戲」的角色。找不到這個角色時會停在選角畫面，不會用別的角色進遊戲</div>
+      <div data-show="autoLogin" style="display:grid;gap:3px">
+        <div>　帳號 <input id="rb-cu" type="text" autocomplete="off" spellcheck="false" style="width:96px"> 密碼 <input id="rb-cp" type="password" autocomplete="new-password" style="width:80px"></div>
+        <div>　<button class="btn" id="rb-csave" type="button">儲存帳號密碼</button> <button class="btn" id="rb-cclr" type="button">清除</button> <span class="hint" id="rb-cst"></span></div>
+        <div class="hint">　被登出時自動登入（所有設定檔共用）。存在擴充功能裡，遊戲網頁讀不到；密碼以明碼存在這台電腦的 Chrome 設定檔。登入失敗會停下，10 分鐘內不重試</div>
+      </div>
       <button class="btn" id="rb-popout" type="button">把遊戲移到獨立視窗</button>
       <div class="hint">遊戲分頁被切走、最小化、被完全蓋住時遊戲會停住；請讓它單獨一個視窗並露出來。所有設定檔共用</div>`)}
     ${SEC('原地掛機細節', `
@@ -1412,12 +1546,12 @@
   </div>
 
   <div class="pg" data-pg="skill">
-    <div class="h">技能優先序 <span class="hint" id="rb-cls"></span></div>
-    ${LIST('priority.@cls', '一行一個，越上面越優先&#10;例：&#10;神聖之光&#10;治癒術', 96)}
+    <div class="h">技能優先序</div>
+    ${LIST('priority', '一行一個，越上面越優先&#10;例：&#10;神聖之光&#10;治癒術', 96)}
     <div class="h">不要的技能 <span class="hint">出現就放逐、絕不選</span></div>
-    ${LIST('skillBanish.@cls', '例：緩速術')}
+    ${LIST('skillBanish', '例：緩速術')}
     <div class="h">核心技能 <span class="hint">出現就專注、之後更常出現</span></div>
-    ${LIST('skillFocus.@cls', '例：神聖之光')}
+    ${LIST('skillFocus', '例：神聖之光')}
     <div class="hint">沒命中優先序時會用重抽換卡（次數在「重抽」分頁）。清單依職業各存一份</div>
   </div>
 
@@ -1502,6 +1636,19 @@
       d.ontoggle = () => { try { localStorage.setItem('roBot.dt.' + d.dataset.dt, d.open ? '1' : '0'); } catch {} };
     });
     panel.querySelectorAll('nav button').forEach((b) => { b.onclick = () => { cfg.tab = b.dataset.tab; save(); render(true); }; });
+    // 帳號密碼：不走 cfg（不進 localStorage），透過背景頁存在 chrome.storage.local；面板只顯示帳號
+    const credShow = () => { g('rb-cst').textContent = BOT.credUser ? `已儲存：${BOT.credUser}` : '尚未儲存'; if (BOT.credUser && document.activeElement !== g('rb-cu')) g('rb-cu').value = BOT.credUser; };
+    extMsg({ type: 'cred:get' }, (r) => { BOT.credUser = r?.user || ''; credShow(); });
+    g('rb-csave').onclick = () => {
+      const u = g('rb-cu').value.trim(), pw = g('rb-cp').value;
+      if (!u || !pw) { g('rb-cst').textContent = '帳號密碼都要填'; return; }
+      extMsg({ type: 'cred:set', u, p: pw }, (r) => {
+        g('rb-cp').value = '';
+        if (!r?.ok) { g('rb-cst').textContent = '儲存失敗：' + (r?.error || '') + '（擴充功能要先 ⟳ 或到 chrome://extensions 按 ↻）'; return; }
+        BOT.credUser = u; try { sessionStorage.removeItem(LOGIN_TRY_KEY); } catch {} BOT.loginErr = null; credShow();
+      });
+    };
+    g('rb-cclr').onclick = () => extMsg({ type: 'cred:clear' }, () => { BOT.credUser = ''; g('rb-cu').value = ''; g('rb-cp').value = ''; credShow(); });
     g('rb-popout').onclick = () => extMsg({ type: 'popout' }, (r) => { panel.querySelector('#rb-st').textContent = r?.ok ? (r.alone ? '已經是獨立視窗了' : '已移到獨立視窗') : '失敗：' + (r?.error || '請先重新載入擴充功能'); });
     g('rb-anchor').onclick = () => { const P = BOT.run?.player; if (P) BOT.anchor = { x: P.x, y: P.y }; render(); };
     g('rb-min').onclick = () => panel.classList.toggle('min');
@@ -1568,8 +1715,6 @@
     if (!panel) return;
     const g = (id) => panel.querySelector('#' + id);
     const act = document.activeElement;
-    const cls = classId(BOT.run);
-    if (cls !== lastCls) { full = true; lastCls = cls; }
     g('rb-ver').textContent = 'v' + BOT.version;
     const sel = g('rb-prof'), names = profileNames();
     if (full || sel.options.length !== names.length || [...sel.options].some((o, i) => o.value !== names[i])) {
@@ -1592,13 +1737,12 @@
     if (g('rb-flow') !== act) g('rb-flow').value = cfg.gate.on ? 'gate' : cfg.mode;
     DIFF.forEach((_, i) => { g('rb-dv' + i).textContent = Math.round(cfg.diff[i] * 100) + '%'; });
     panel.querySelectorAll('.seg[data-d]').forEach((sg) => sg.querySelectorAll('button').forEach((b) => b.classList.toggle('on', (cfg.deity[sg.dataset.d] || '') === b.dataset.v)));
-    g('rb-cls').textContent = `（${cls}）`;
     { const l = gateSkills(); g('rb-gskl').textContent = l.length ? `＝${l.join('、')}` : '技能分頁還沒有優先序'; }
 
     const r = inRun(), P = r?.player, pk = r?.perksLeft;
     g('rb-perkleft').textContent = pk ? `這場遊戲還剩：單張 ${pk.reroll_card ?? 0}、全部 ${pk.reroll ?? 0}、放逐 ${pk.banish ?? 0}、專注 ${pk.focus ?? 0}` : '進關後顯示這場剩餘次數';
     const ph = phase();
-    g('rb-st').textContent =
+    g('rb-st').textContent = (BOT.loginErr ? `⚠ ${BOT.loginErr}\n` : '') + (BOT.loginWarn ? `⚠ 自動登入找不到角色「${BOT.loginWarn}」，請手動選\n` : '') +
       `${r ? '關卡中 · ' + r.state : visible($('#lobby-ui')) ? '城鎮' + (cfg.loop && H.nextEnterAt > Date.now() ? ` · ${Math.ceil((H.nextEnterAt - Date.now()) / 1000)} 秒後進關` : '') : '—'}` +
       (r ? `  怪 ${BOT.dbg?.enemies ?? '-'}  威脅 ${BOT.dbg?.threat ?? '-'}\n` +
            `HP ${r.hp != null ? Math.round(r.hp) + '/' + Math.round(r.stats?.maxHp ?? 0) : '-'}  zeny ${r.zeny ?? '-'}  卡住 ${BOT.stuck || 0}\n` +

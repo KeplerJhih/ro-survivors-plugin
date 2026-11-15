@@ -94,13 +94,13 @@
 | 頂部 | 設定檔下拉＋新增/複製/改名/刪除；⟳ 熱更新 | `STORE.profiles` / `activeProfile` |
 | 控制 | 自動戰鬥/選卡/進關/繼續（共用）；玩法＝先巡邏→條件達成原地掛機／一開始原地／一直遊走；巡邏條件；原地/遊走細節（摺疊） | `fight` `pick` `loop` `autoResume`；`gate`、`mode`、`huntLeave*`、`huntPoorSec`、`huntPhase.onFail`、`idle*`、`sweep`、`dangerR`、`zenyMin` |
 | 關卡 | 關卡、難度、打幾場停、結算等待 | `stage` `diff` `maxRuns` `reenterDelay` |
-| 技能 | 優先序、不要的（放逐＋絕不選）、核心（專注），依職業 | `priority.@cls` `skillBanish.@cls` `skillFocus.@cls` |
+| 技能 | 優先序、不要的（放逐＋絕不選）、核心（專注），每個設定檔一份（v0.7.7 起不分職業） | `priority` `skillBanish` `skillFocus` |
 | 寶箱 | 優先序、品質低於就重抽、不換身上裝備、不要/想要、組隊擲骰 | `chestPriority` `chestMinQ` `chestAvoidSwap` `chestBanish` `chestFocus` `roll` |
 | 神祇 | 14 神祇 —/🎯/✕、其他想要、沒神祇也重抽全部 | `deity` `deityExtra` `deityRerollAll` |
 | 重抽 | 一張表：神祇/寶箱/技能 × 單張/全部/放逐/專注；獵神時全給神祇 | `perks.{deity,chest,skill}` `perks.huntAll` |
 | 紀錄 | 達成率、場次、掉落、匯出 CSV | localStorage `roBot.log` `roBot.drops` |
 
-- 面板用宣告式綁定：`data-k`（路徑，`@cls`＝目前職業）、`data-list`（一行一個）、`data-show`（顯示條件）
+- 面板用宣告式綁定：`data-k`（路徑）、`data-list`（一行一個）、`data-show`（顯示條件）
 - 共用設定（`GLOBAL_KEYS`）：fight / pick / loop / autoResume / reenterDelay / maxRuns / tab；其餘跟著設定檔
 - 其他 localStorage：`roBot.pos`（面板位置）、`roBot.skillMap`（技能名→id）、`roBot.dt.*`（摺疊開合）
 - 每場狀態存在 `window.__roHook.rs`（依 runSeq），熱更新不會清掉
@@ -122,6 +122,10 @@
 - 實測數據：卡牆 17%→4%（v0.2）→0%（v0.4.5）；獵神斐揚洞穴第 1 個寶箱 1:15 拿到（v0.5.2）
 
 ## 版本紀錄（新 → 舊）
+- **0.7.9（自動登入）** 遊戲改版（`main-*.js` 換檔名）時會自動重新載入；2026-11-15 07:48 那次還取消訪客模式並清掉登入狀態，標題畫面變成「建立帳號／進入」＋「現在需要帳號」對話框，bot 卡住。新增帳號密碼自動登入：面板「控制 → 長時間掛機」填帳號密碼，存在擴充功能 `chrome.storage.local`（bg.js `cred:get/set/clear`，遊戲網頁讀不到，面板只拿得到帳號）；被登出時關對話框 → 切 `[data-sp-tab=login]` → 填 `#sp-login` → 送出。10 分鐘內只試一次（`sessionStorage roBot.loginTried`，跨重新整理），`.sp-error` 有字就停下並在狀態列提示。角色選擇修正：以前從 `#hud-name` 記角色（那裡有時是職業名，例 `Espadachín`，有時是「名稱 職業」）→ 對不上選角畫面就用預設第一隻角色進遊戲（04:39 選錯角色）。改成按「開始遊戲」時記選中的 `.slot-name`，存進設定檔 `char`（面板可自己填）；找不到就停在選角畫面並提示，不再用錯角色。測試 `login-char` `login-cred`。
+- **0.7.9** 掉落小卡顯示物品數值（例：`稀有 武器 Great Bow DEX +2`）：結算畫面只有名稱，數值在伺服器回應 `POST op`（`{op:"loot"}`，組隊 `gclaim`）的 `granted.gear[].affixes`。bot 包一層 `window.fetch` **只讀回應副本**（`clone()`），不改請求和回應；遊戲每次呼叫 `ze()` 時才取 `fetch`，所以熱更新後就生效，不用改 hook.js、不用刷新。包裝只裝一次（`H.fetchWrapped`），處理函式在 `H.onLoot`。只存 `granted` 的 gear/cards/eggs（不存回應裡的角色存檔 `doc`）到 `roBot.lootRaw`（最近 10 筆）。畫面裝備順序＝`granted.gear` 順序。affixes 格式待實戰確認，`fmtAff()` 先寫成通用解析。
+- **0.7.8** 紀錄分頁的掉落改成「每場一張小卡」（最新在上、最近 3 場展開，最多 20 場）：裝備一件一行「品質 部位 名稱 +素質」、卡片一行、? 來源小字；拿掉「稀有以上」「卡片 N 種」「本次掛機全部」。部位：結算圖片 `items/<編號>.png` 的編號照 RO 編號區間判斷（`SLOT_R`，對過遊戲物品資料庫 222 件全對）；素質：名稱後綴 `of Dexterity` → DEX（遊戲只有英文名，加多少數值結算畫面不顯示）。場次紀錄多存 `items`（q/name/kind/slot/stat）與 `lootNote`（沒掉落／寄到郵差／伺服器沒回應時結算畫面的訊息，02:59 那場 15 個 ? 卻 0 件就是這種）；舊紀錄從 `drops` 字串解析。掉落 CSV 加「部位」「素質」。
+- **0.7.7** 技能設定改成跟著設定檔走（設定檔＝一隻角色），不再依職業分開存：原本 `priority/skillBanish/skillFocus` 是 `{ 職業id: [...] }`，從服事設定檔複製出法師設定檔、角色換成法師時，技能分頁讀 `mage` 那份是空的，看起來像切換失敗。舊資料載入時每個設定檔取第一份有內容的清單轉成陣列；拿掉 `classId()`、`@cls` 綁定與技能標題旁的（職業）。測試 `tests/skill-per-profile.test.js`。
 - **0.7.6** 面板底部狀態列「掉落 N」（數掉落展示，伺服器掉落後永遠 0）改成這場的「? 裝備 N・卡 M」（`run.dropsBy`）；沒有 `dropsBy`（舊版遊戲／組隊非房主）時照舊。
 - **0.7.5** 面板可拖右下角調整大小（CSS `resize:both`），放開時有變才把寬高存進 `roBot.pos`（`w`/`h`），切分頁的高度變化不存；收合時 `height:auto`。預設寬 240 時紀錄表格、技能條件那行會被擠到，拉寬就好。測試 `tests/panel-resize.test.js`。
 - **0.7.4** 配合伺服器掉落改版：

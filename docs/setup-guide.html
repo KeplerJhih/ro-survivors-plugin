@@ -402,7 +402,7 @@ dl.faq dd{margin:2px 0 0;color:var(--muted);font-size:14px}
         </div>
         <!-- 技能 -->
         <div class="pg" data-pg="skill">
-          <div class="h">技能優先序 <span class="hint">服事</span></div>
+          <div class="h">技能優先序</div>
           <div class="ta tall" id="ta-pri" data-t="pri" data-ph="一行一個，越上面越優先"></div>
           <div class="h">不要的技能 <span class="hint">出現就放逐、絕不選</span></div>
           <div class="ta" id="ta-ban" data-t="sban" data-ph="例：緩速術"></div>
@@ -518,7 +518,7 @@ dl.faq dd{margin:2px 0 0;color:var(--muted);font-size:14px}
     { g: 2, scene: 'game', tab: 'skill', t: 'pri', title: '排技能優先序',
       fx: (instant) => { typeInto($('#ta-pri'), '神聖之光\n治癒術', instant); $('#ta-ban').textContent = instant ? '緩速術' : ''; if (!instant && !reduce) later(() => typeInto($('#ta-ban'), '緩速術'), 1300); else $('#ta-ban').textContent = '緩速術'; },
       body: '<p>一行寫一個技能名稱，越上面越先選。</p><p><b>不要的技能</b>出現就放逐、絕不選；<b>核心技能</b>出現就專注，之後更常出現。</p>',
-      note: '清單是依職業各存一份的，換職業會自動換成那個職業的清單。' },
+      note: '清單跟著設定檔走，一個設定檔＝一隻角色；換角色時切換設定檔就好。' },
     { g: 2, scene: 'game', tab: 'chest', t: 'deity0', title: '指定想要的神祇',
       fx: () => setDeity('堡壘之神', 'want'),
       body: '<p>在 <b>寶箱</b> 分頁最上面的 <b>🎯 神祇</b> 區塊，想要的神祇按 <b>🎯</b>（例如坦用的 <b>堡壘之神</b>），不想要的按 <b>✕</b>。</p><p>🎯 的神祇會最優先、出現就專注；開寶箱沒看到它時，會用單張重抽一直換神祇卡。</p>' },
