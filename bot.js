@@ -6,7 +6,7 @@
   if (window.__roBot?.destroy) { try { window.__roBot.destroy(); } catch {} }
   const H = window.__roHook || (window.__roHook = { run: null, lobby: null, runs: 0, runSeq: 0, drops: 0, stuck: 0 });
   const BOT = (window.__roBot = {
-    version: '0.8.5',
+    version: '0.8.6',
     get run() { return H.run; },
     get lobby() { return H.lobby; },
     get runs() { return H.runs; }, set runs(v) { H.runs = v; },
@@ -1388,7 +1388,8 @@
     // 廣場 5 分鐘沒動作被登出：「你已 5 分鐘沒有動作…」→ 按「我知道了」，再照常按開始遊戲
     // （v0.8.2 移到帳號登入之前：提示蓋在登入畫面上時先關掉）
     // （維護前伺服器踢人也是這個提示，標題「暫離」，按鈕「接受」）
-    if (/沒有動作|已離開遊戲|sin tocar|inactiv/i.test(document.body.innerText)) {
+    // v0.8.6：維修斷線的「離線：沒有連線到伺服器…戰利品由郵差送給你」也一樣按「接受」
+    if (/沒有動作|已離開遊戲|sin tocar|inactiv|沒有連線到伺服器|sin conexión|not connected/i.test(document.body.innerText)) {
       const ok = btnByText(/^(接受|我知道了|Aceptar|Accept|Entendido|OK|Got it|Vale)$/i);
       if (ok) { log('閒置被登出 → 關閉提示，重新登入'); return void clickBtn(ok, rnd(1500, 2500)); }
     }
@@ -1430,7 +1431,8 @@
   function inRun() {
     const r = BOT.run;
     // v0.8.2：被登出回到標題／選角畫面時，hook 裡的 run 還停在 over → 不算在關卡中，改走自動登入
-    if (visible($('#sp-login')) || visible($('#sp-register')) || visible($('#btn-play'))) return null;
+    // v0.8.6：伺服器維修（.sp-maint-retry）、標題頁「開始遊戲」(#sp-play) 也算（維修斷線時 run 會一直停在 over）
+    if (visible($('#sp-login')) || visible($('#sp-register')) || visible($('#btn-play')) || visible($('#sp-play')) || visible($('.sp-maint-retry'))) return null;
     return r && r.player && !r.replayMoves && visible($('#lobby-ui')) === false ? r : null;
   }
 

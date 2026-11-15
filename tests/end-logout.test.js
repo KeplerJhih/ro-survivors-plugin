@@ -6,14 +6,15 @@ const PAGE = `<html><head><meta charset="utf-8"></head><body>
   <div id="gameover" style="display:none"><div id="go-title">你存活下來了！</div><button id="btn-restart" class="ro-btn primary">返回角色</button></div>
   <div id="npc-dialog" style="display:none"><div id="npc-name">暫離</div><div id="npc-text"><p>你已 5 分鐘沒有動作，已離開遊戲。</p></div><div id="npc-options"><button class="ro-btn primary">接受</button></div></div>
  <div id="charselect" style="display:none"><div id="slots"><div class="slot selected"><div class="slot-name">Kepler</div></div><div class="slot"><div class="slot-name">阿服快打</div></div></div><button id="btn-play">開始遊戲</button></div>
+  <div id="maint" style="display:none"><button class="sp-maint-retry">再檢查一次</button></div><button id="sp-play" style="display:none">開始遊戲！</button>
   <div id="splash" style="display:none"><div class="sp-tabs"><button data-sp-tab="login">進入</button><button data-sp-tab="register" class="active">建立帳號</button></div>
   <form id="sp-login" style="display:none"><input name="username"><input type="password" name="password"><button type="submit">進入</button><p class="sp-error"></p></form>
   <form id="sp-register"><input name="username"><input type="password" name="password"><button type="submit">建立帳號</button></form></div>
 </body></html>`;
-async function open(b, kicked, charsel) {
+async function open(b, kicked, charsel, maint) {
   const p = await b.newPage({ viewport: { width: 900, height: 900 } }); const errs = []; p.on('pageerror', e => errs.push(e.message));
   await p.route('https://ro-survivors.com/', r => r.fulfill({ contentType: 'text/html; charset=utf-8', body: PAGE }));
-  await p.addInitScript(([kicked, charsel]) => {
+  await p.addInitScript(([kicked, charsel, maint]) => {
     localStorage.setItem('roBot.cfg', JSON.stringify({ fight: true, pick: true, loop: true, autoLogin: true, v: 3, tab: 'main', activeProfile: 'A', profiles: { A: { char: '阿服快打' } } }));
     const run = { state: kicked ? 'over' : 'playing', time: 900, level: 50, zeny: 0, chestCost: () => 30, chestsOpened: 0, player: { x: 500, y: 500 }, pickups: [], touchMove: { x: 0, y: 0 }, bounds: { x0: 0, x1: 3000, y0: 0, y1: 3000 },
       enemies: [], weapons: [], classDef: { id: 'acolyte' }, runItems: { slots: new Map() }, runItemName: (s, i) => i, perksLeft: {}, stats: { maxHp: 100 }, hp: 100 };
@@ -32,10 +33,13 @@ async function open(b, kicked, charsel) {
       $('#sp-login').onsubmit = (e) => { e.preventDefault(); window.__ev.push('submit'); };
       document.querySelectorAll('.slot').forEach((sl) => sl.onclick = () => { window.__ev.push('slot:' + sl.textContent); document.querySelectorAll('.slot').forEach((x) => x.classList.toggle('selected', x === sl)); });
       $('#btn-play').onclick = () => window.__ev.push('play');
+      $('.sp-maint-retry').onclick = () => window.__ev.push('retry');
+      $('#sp-play').onclick = () => window.__ev.push('sp-play');
+      if (maint) { $('#profile-bar').style.display = 'none'; $('#maint').style.display = ''; $('#npc-name').textContent = '離線'; $('#npc-text').innerHTML = '<p>沒有連線到伺服器。你這局的戰利品會在你重新進入時由普隆德拉的郵差送給你。</p>'; $('#npc-dialog').style.display = ''; return; }
       if (charsel) { $('#profile-bar').style.display = 'none'; $('#charselect').style.display = ''; return; }
       if (kicked) { $('#profile-bar').style.display = 'none'; $('#splash').style.display = ''; $('#npc-dialog').style.display = ''; }
     });
-  }, [kicked, charsel]);
+  }, [kicked, charsel, maint]);
   await p.goto('https://ro-survivors.com/');
   await p.addScriptTag({ path: require('path').join(__dirname, '..', 'bot.js') });
   return { p, errs };
@@ -63,6 +67,17 @@ async function open(b, kicked, charsel) {
   await p.waitForTimeout(8000);
   ev = await p.evaluate(() => window.__ev);
   ok(ev[0] === 'slot:阿服快打' && ev.includes('play'), '選角畫面：選對角色並開始 ' + JSON.stringify(ev));
+  ok(!errs.length, 'no page errors ' + errs.join(';')); await p.close();
+  // ④ 維修斷線（離線提示＋維護中），run 停在 over：不登入、只按重新檢查；維修結束出現「開始遊戲」→ 關提示、按開始
+  ({ p, errs } = await open(b, true, false, true));
+  await p.waitForTimeout(5000);
+  ev = await p.evaluate(() => window.__ev);
+  ok(JSON.stringify(ev) === '["retry"]', '維修中：只按一次重新檢查 ' + JSON.stringify(ev));
+  ok(/維修中/.test(await p.evaluate(() => document.getElementById('rb-st').textContent)), '狀態列顯示維修中');
+  await p.evaluate(() => { document.getElementById('maint').style.display = 'none'; document.getElementById('sp-play').style.display = ''; });
+  await p.waitForTimeout(8000);
+  ev = await p.evaluate(() => window.__ev);
+  ok(JSON.stringify(ev) === '["retry","accept","sp-play"]', '維修結束：關離線提示 → 開始遊戲 ' + JSON.stringify(ev));
   ok(!errs.length, 'no page errors ' + errs.join(';')); await p.close();
   console.log(fail ? `FAILED ${fail}` : 'ALL PASS');
   await b.close();
