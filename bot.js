@@ -6,7 +6,7 @@
   if (window.__roBot?.destroy) { try { window.__roBot.destroy(); } catch {} }
   const H = window.__roHook || (window.__roHook = { run: null, lobby: null, runs: 0, runSeq: 0, drops: 0, stuck: 0 });
   const BOT = (window.__roBot = {
-    version: '0.8.6',
+    version: '0.8.7',
     get run() { return H.run; },
     get lobby() { return H.lobby; },
     get runs() { return H.runs; }, set runs(v) { H.runs = v; },
@@ -790,8 +790,34 @@
   }
 
   // ───────────────────────── 6. Lobby → stage → difficulty ─────────────────────────
+  // v0.8.7「你的上一局」（遊戲 Beta 0.7）：斷線／維修時那局的戰利品在重新進入時補進帳號，對話框列出「品質: 名稱」與卡片。
+  // 記進掉落紀錄（裝備總覽看得到），再按「接受」。以前在廣場只會按取消／關閉 → 會卡住
+  const LASTRUN_Q = new RegExp('^(' + QUALITY.join('|') + ')\\s*[:：]\\s*(.+)$');
+  function lastRunTick() {
+    const dlg = $('#npc-dialog');
+    if (!visible(dlg) || !/你的上一局|Tu última partida|Your last (run|game)/i.test($('#npc-name')?.textContent || '')) return false;
+    const txt = ($('#npc-text', dlg) || dlg).innerText, sig = txt.length + '|' + txt.slice(0, 80);
+    if (H.lastRunSig !== sig) {
+      H.lastRunSig = sig;
+      const ids = $$('img', dlg).map((i) => +((i.getAttribute('src') || '').match(/items\/(\d+)\./)?.[1] || 0)).filter(Boolean);
+      const L = loadLog(), stage = L[L.length - 1]?.stage || '';
+      let gi = 0;
+      const got = txt.split(/\n|、|，/).map((x) => x.trim()).filter(Boolean).map((x) => {
+        const m = x.match(LASTRUN_Q);
+        if (m) { const name = m[2].trim(), id = ids[gi++] || 0; return { q: m[1], name, kind: '裝備', stat: splitName(name)[1], ...(id ? { id, slot: slotOf(id) } : {}) }; }
+        if (/ Card$/.test(x)) return { q: '', name: x, kind: '卡片' };
+        return null;
+      }).filter(Boolean).map((d) => ({ at: Date.now(), seq: H.runSeq, stage, stats: '', src: '上一局補發', ...d }));
+      if (got.length) { const a = loadDrops(); a.push(...got); saveDrops(a); log('上一局補發', got.length, '件', got.map((d) => `${d.q} ${d.name}`).join('、')); }
+      if (cfg.tab === 'log') renderLog(true);
+    }
+    const ok = $$('button', dlg).find((b) => visible(b) && b.classList.contains('primary')) || btnByText(/^(接受|Aceptar|Accept|OK)$/i, dlg);
+    if (ok) clickBtn(ok, rnd(1200, 2000));
+    return true;
+  }
   function lobbyTick() {
     if (!ready()) return;
+    if (lastRunTick()) return;
     if (H.nextEnterAt && Date.now() < H.nextEnterAt) return; // 結算後的等待時間
     if (cfg.maxRuns && BOT.runs >= cfg.maxRuns) { cfg.loop = false; save(); render(); return; }
 
@@ -1376,6 +1402,7 @@
   }
   function loginTick() {
     if (!ready()) return;
+    if (lastRunTick()) return;
     // 維修中：不登入，每 5 分鐘（±20%）按一次「重新檢查」
     const retry = $('.sp-maint-retry');
     if (visible(retry)) {
