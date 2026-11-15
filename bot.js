@@ -6,7 +6,7 @@
   if (window.__roBot?.destroy) { try { window.__roBot.destroy(); } catch {} }
   const H = window.__roHook || (window.__roHook = { run: null, lobby: null, runs: 0, runSeq: 0, drops: 0, stuck: 0 });
   const BOT = (window.__roBot = {
-    version: '0.8.2',
+    version: '0.8.3',
     get run() { return H.run; },
     get lobby() { return H.lobby; },
     get runs() { return H.runs; }, set runs(v) { H.runs = v; },
@@ -1287,8 +1287,8 @@
   // ───────────────────────── 8. Main loop ─────────────────────────
   function inRun() {
     const r = BOT.run;
-    // v0.8.2：被登出回到標題畫面時，hook 裡的 run 還停在 over → 不算在關卡中，改走自動登入
-    if (visible($('#sp-login')) || visible($('#sp-register'))) return null;
+    // v0.8.2：被登出回到標題／選角畫面時，hook 裡的 run 還停在 over → 不算在關卡中，改走自動登入
+    if (visible($('#sp-login')) || visible($('#sp-register')) || visible($('#btn-play'))) return null;
     return r && r.player && !r.replayMoves && visible($('#lobby-ui')) === false ? r : null;
   }
 
