@@ -6,7 +6,7 @@
   if (window.__roBot?.destroy) { try { window.__roBot.destroy(); } catch {} }
   const H = window.__roHook || (window.__roHook = { run: null, lobby: null, runs: 0, runSeq: 0, drops: 0, stuck: 0 });
   const BOT = (window.__roBot = {
-    version: '0.8.3',
+    version: '0.8.4',
     get run() { return H.run; },
     get lobby() { return H.lobby; },
     get runs() { return H.runs; }, set runs(v) { H.runs = v; },
@@ -1199,7 +1199,32 @@
   BOT.cleanup.push(() => document.removeEventListener('click', onPlayClick, true));
   // v0.7.9 帳號密碼自動登入：登入狀態被清掉（遊戲改版、session 過期）時，標題畫面變成「建立帳號／進入」。
   // 關掉「現在需要帳號」對話框 → 切到「進入」→ 填帳號密碼 → 按進入。10 分鐘內最多試一次（跨重新整理也算），失敗就停下提示，避免一直試錯被鎖
-  const LOGIN_TRY_KEY = 'roBot.loginTried';
+  // v0.8.4 自動登入節流（存 localStorage，重新整理也算）：一次「送密碼 → 開始遊戲 → 選角開始」算一回合，回合內每個按鈕只按一次。
+  // 沒進到大廳／關卡＝這回合失敗，下一回合等 1→3→10→20→30 分（±20%）；送密碼 24 小時最多 6 次；維修中、排隊中不動作。
+  // 進到大廳或關卡就歸零。目的：伺服器維修／更新時不要一直重複登入。
+  const LG_KEY = 'roBot.loginGuard', LG_WAIT = [0, 1, 3, 10, 20, 30], LG_PW_DAY = 6, LG_WIN = 120000;
+  const lgLoad = () => { try { return JSON.parse(localStorage.getItem(LG_KEY)) || {}; } catch { return {}; } };
+  const lgSave = (g) => { try { localStorage.setItem(LG_KEY, JSON.stringify(g)); } catch {} };
+  BOT.lgPending = true;
+  function loginStep(step) {
+    const g = lgLoad(), now = Date.now();
+    g.pw = (g.pw || []).filter((t) => now - t < 86400000);
+    if (step === 'pw' && g.pw.length >= LG_PW_DAY) { BOT.loginErr = `24 小時內已自動送出 ${LG_PW_DAY} 次密碼，先停下，請手動登入`; return false; }
+    if (!g.win || now - g.win > LG_WIN) {
+      if (now < (g.next || 0)) { BOT.loginErr = `自動登入第 ${g.n} 次沒進到遊戲，約 ${Math.ceil((g.next - now) / 60000)} 分鐘後再試`; return false; }
+      g.n = (g.n || 0) + 1; g.win = now; g.steps = [];
+      g.next = now + LG_WAIT[Math.min(g.n, LG_WAIT.length - 1)] * 60000 * (0.8 + Math.random() * 0.4);
+    }
+    if (g.steps.includes(step)) return false;
+    g.steps.push(step); if (step === 'pw') g.pw.push(now);
+    lgSave(g); BOT.lgPending = true; return true;
+  }
+  function loginOk() { // 進到大廳／關卡：回合數歸零（送密碼的 24 小時紀錄保留）
+    if (!BOT.lgPending) return;
+    BOT.lgPending = false; const g = lgLoad();
+    if (g.n || g.win) { lgSave({ pw: g.pw || [] }); log('登入成功 → 重試計數歸零'); }
+  }
+  function lgHold() { const g = lgLoad(); if (g.win) { g.win = Date.now(); lgSave(g); } } // 排隊中：回合延長，不算失敗
   function setInput(el, v) {
     const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
     set.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true }));
@@ -1214,8 +1239,6 @@
     }
     const err = lf && $('.sp-error', lf)?.textContent.trim();
     if (err) { BOT.loginErr = '自動登入失敗：' + err; return true; }
-    let last = 0; try { last = +sessionStorage.getItem(LOGIN_TRY_KEY) || 0; } catch {}
-    if (Date.now() - last < 600000) { BOT.loginErr ||= '自動登入已試過，10 分鐘內不重試'; return true; }
     const dlg = $('#npc-dialog');
     if (visible(dlg) && /需要帳號|hace falta una cuenta|need an account/i.test($('#npc-name')?.textContent || '')) {
       // 有「我已經有帳號」就按它；只有「建立我的帳號」時按了只是切到註冊頁，之後再切到「進入」
@@ -1226,12 +1249,12 @@
     }
     if (!visible(lf)) { const tab = $('[data-sp-tab="login"]'); if (tab) { log('自動登入：切到「進入」'); clickBtn(tab, rnd(600, 900)); } return true; }
     if (BOT.loginBusy) return true;
+    if (!loginStep('pw')) return true;
     BOT.loginBusy = true; wait(5000);
     extMsg({ type: 'cred:get', full: true }, (r) => {
       BOT.loginBusy = false;
       const c = r?.cred, u = $('input[name="username"]', lf), pw = $('input[name="password"]', lf), sub = $('button[type="submit"]', lf);
       if (!c?.u || !c?.p || !u || !pw || !sub) { BOT.loginErr = '自動登入：讀不到帳號密碼或登入表單'; return; }
-      try { sessionStorage.setItem(LOGIN_TRY_KEY, String(Date.now())); } catch {}
       setInput(u, c.u); setInput(pw, c.p);
       log('自動登入：帳號', c.u);
       setTimeout(() => { sub.click(); setTimeout(() => { try { setInput(pw, ''); } catch {} }, 3000); }, rnd(500, 900));
@@ -1240,6 +1263,15 @@
   }
   function loginTick() {
     if (!ready()) return;
+    // 維修中：不登入，每 5 分鐘（±20%）按一次「重新檢查」
+    const retry = $('.sp-maint-retry');
+    if (visible(retry)) {
+      BOT.loginErr = '伺服器維修中：暫停自動登入，每 5 分鐘重新檢查一次';
+      if (!retry.disabled && Date.now() > (BOT.maintAt || 0)) { BOT.maintAt = Date.now() + 300000 * (0.8 + Math.random() * 0.4); log('維修中 → 重新檢查'); clickBtn(retry, 3000); }
+      return;
+    }
+    // 伺服器額滿排隊中：什麼都不按（再按開始會重新排隊），也不算登入失敗
+    if ($$('.ro-window').some((w) => visible(w) && /伺服器已滿|正在排隊|en cola|queue/i.test(w.innerText))) { BOT.loginErr = null; lgHold(); return; }
     // 廣場 5 分鐘沒動作被登出：「你已 5 分鐘沒有動作…」→ 按「我知道了」，再照常按開始遊戲
     // （v0.8.2 移到帳號登入之前：提示蓋在登入畫面上時先關掉）
     // （維護前伺服器踢人也是這個提示，標題「暫離」，按鈕「接受」）
@@ -1260,14 +1292,11 @@
       }
       BOT.loginWarn = null;
       if (slot && !slot.classList.contains('selected')) return void clickBtn(slot, rnd(600, 1000));
-      if (!play.disabled) { log('自動登入：開始遊戲', want || '(目前選取的角色)'); return void clickBtn(play, rnd(3000, 4000)); }
+      if (!play.disabled && loginStep('char')) { log('自動登入：開始遊戲', want || '(目前選取的角色)'); return void clickBtn(play, rnd(3000, 4000)); }
       return;
     }
     const sp = $('#sp-play');
-    if (visible(sp) && !sp.disabled && /開始遊戲|Jugar|Play/i.test(sp.textContent)) { log('自動登入：標題畫面'); return void clickBtn(sp, rnd(2500, 3500)); }
-    // 維護中：每分鐘按一次「重新檢查」
-    const retry = $('.sp-maint-retry');
-    if (visible(retry) && !retry.disabled && Date.now() - (BOT.maintAt || 0) > 60000) { BOT.maintAt = Date.now(); clickBtn(retry, 3000); }
+    if (visible(sp) && !sp.disabled && /開始遊戲|Jugar|Play/i.test(sp.textContent) && loginStep('play')) { log('自動登入：標題畫面'); return void clickBtn(sp, rnd(2500, 3500)); }
   }
 
   // ───────────────────────── 7. Run end ─────────────────────────
@@ -1299,6 +1328,7 @@
         BOT.seq = H.runSeq; VISIT.clear(); BOT.phase = null; BOT.sweep = null; BOT.sweepEnd = Date.now(); BOT.leaving = false; BOT.endHandled = false; BOT.rs;
       }
       const run = inRun();
+      if ((run && run.state === 'playing') || visible($('#lobby-ui'))) loginOk();
       if (run) {
         const st = run.state;
         const ph = phase();
@@ -1674,7 +1704,7 @@
       extMsg({ type: 'cred:set', u, p: pw }, (r) => {
         g('rb-cp').value = '';
         if (!r?.ok) { g('rb-cst').textContent = '儲存失敗：' + (r?.error || '') + '（擴充功能要先 ⟳ 或到 chrome://extensions 按 ↻）'; return; }
-        BOT.credUser = u; try { sessionStorage.removeItem(LOGIN_TRY_KEY); } catch {} BOT.loginErr = null; credShow();
+        BOT.credUser = u; lgSave({}); BOT.loginErr = null; credShow(); // 重新存帳密＝使用者處理過了，節流紀錄清空
       });
     };
     g('rb-cclr').onclick = () => extMsg({ type: 'cred:clear' }, () => { BOT.credUser = ''; g('rb-cu').value = ''; g('rb-cp').value = ''; credShow(); });
