@@ -6,7 +6,7 @@
   if (window.__roBot?.destroy) { try { window.__roBot.destroy(); } catch {} }
   const H = window.__roHook || (window.__roHook = { run: null, lobby: null, runs: 0, runSeq: 0, drops: 0, stuck: 0 });
   const BOT = (window.__roBot = {
-    version: '0.9.6',
+    version: '0.9.7',
     get run() { return H.run; },
     get lobby() { return H.lobby; },
     get runs() { return H.runs; }, set runs(v) { H.runs = v; },
@@ -100,6 +100,7 @@
     skillOkTop: 0,         // 命中優先序前 N 名才算滿意（0 = 命中任何一個）
     skillBanish: [],
     skillFocus: [],
+    skillUpg: [],          // v0.9.7 技能升級項目順序（升級卡強化行的關鍵字，例：目標、冷卻、傷害）
     // 組隊掉落擲骰：off 自己按 / pass 全部放棄 / greed 全部 Greed / need 全部 Need / rule 依規則
     roll: { mode: 'off', needList: [], passList: [], needQ: '傳說', card: 'rule', other: 'greed' },
     tab: 'main',
@@ -791,17 +792,24 @@
       tag: 'skill', used: BOT.skillUsed, limit,
       // 技能只比對「技能名稱」：說明文字常提到別的技能（例如緩速術的說明寫著「神聖之光…傷害 +30%」），
       // 用整張卡比對會誤判成命中神聖之光（v0.4.8 修正）
-      textOf: (c) => [c.querySelector('.pk-name')?.textContent, c.querySelector('.pk-ribbon')?.textContent].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim() || cardText(c),
+      textOf: (c) => [c.querySelector('.pk-name')?.textContent, c.querySelector('.pk-ribbon')?.textContent,
+        // v0.9.7 升級卡（小字 Lv N）的強化項目（+1 目標、+9 冷卻縮減…）放在 ⟨⟩ 裡給「升級項目順序」用；新技能的說明文字不加（會提到別的技能）
+        /^Lv\s*\d/.test(c.querySelector('.pk-sub')?.textContent.trim() || '') ? '⟨' + [...c.querySelectorAll('.pk-lines li')].map((e) => e.textContent.trim()).join(' ') + '⟩' : '']
+        .filter(Boolean).join(' ').replace(/\s+/g, ' ').trim() || cardText(c),
       banish: cfg.skillBanish, focus: cfg.skillFocus,
       onPick: (best) => { BOT.pendingSkill = { name: cards[best.i]?.querySelector('.pk-name')?.textContent.trim() || best.t, snap: skillSnap(run), at: Date.now() }; },
       score: (t) => {
-        const name = t; // card text contains the skill name
+        const name = t.replace(/⟨.*⟩/, ''), up = t.match(/⟨(.*)⟩/)?.[1];
         const p = hit(pri, name);
         // 滿意 = 命中優先序前 N 名（N=0 表示命中任何一個都算）
         const ok = p >= 0 && (!cfg.skillOkTop || p < cfg.skillOkTop);
         // 放逐名單裡的技能：放逐次數用完（或沒開重抽/放逐）時也絕不選，除非三張都是（v0.6.6 修正）
         const banned = hit(cfg.skillBanish, name) >= 0;
-        const sc = (p >= 0 ? (100 - p) * 100 : (t.includes('新！') ? 0 : 1)) - (banned ? 100000 : 0);
+        // v0.9.7 升級項目順序（例：目標 > 冷卻 > 傷害）：優先清單裡的技能先比強化項目，同項目再比技能順序；
+        // 優先技能的「新！」卡排最前（先學到），沒列到的項目排在列到的後面
+        const U = lines(cfg.skillUpg);
+        const r = !U.length || p < 0 ? 0 : up == null ? 0 : (U.findIndex((x) => up.includes(x)) + 1 || U.length + 1);
+        const sc = (p >= 0 ? (100 - r) * 10000 + (100 - p) * 100 : (t.includes('新！') ? 0 : 1)) - (banned ? 1e8 : 0);
         return { sc, ok: !banned && (ok || !pri.length) };
       },
     });
@@ -1819,6 +1827,8 @@
     ${SEC('技能', `
       ${LEGEND()}
       ${ILIST('skill', '技能名稱，例：神聖之光')}
+      <div class="h">升級項目順序 <span class="hint">同時出現上面清單裡的技能升級時，先比強化項目（例：目標 → 冷卻 → 傷害），同項目再照技能順序；沒學過的優先技能永遠最先。空白＝只照技能順序</span></div>
+      ${ILIST('upg', '強化項目，例：目標、冷卻、傷害')}
       <div class="h">重抽次數 <span class="hint">每場最多；沒出現優先的技能時用來換卡，0＝不用</span></div>
       ${PERKROW('skill')}`, true, '設定檔')}
     <div class="hint perkleft"></div>
@@ -2001,7 +2011,7 @@
   function arrList(w, f, b, opt = {}) {
     const get = (k) => (k ? lines(getP(k)) : []), put = (k, v) => k && setP(k, v);
     return {
-      focus: !!f, order: opt.order !== false,
+      focus: !!f, ban: !!b, order: opt.order !== false,
       rows() {
         const W = get(w), F = get(f), B = get(b);
         return [...new Set([...W, ...F, ...B])].map((n) => ({ n, want: W.indexOf(n), focus: F.includes(n), ban: B.includes(n), del: true }));
@@ -2023,6 +2033,7 @@
     skill: arrList('priority', 'skillFocus', 'skillBanish'),
     chest: arrList('chestPriority', 'chestFocus', 'chestBanish'),
     roll: arrList('roll.needList', null, 'roll.passList', { order: false }),
+    upg: arrList('skillUpg', null, null, { ban: false }),
     deity: {
       focus: false, order: true,
       rows() {
@@ -2046,7 +2057,7 @@
       const nW = rows.filter((r) => r.want >= 0).length;
       list.innerHTML = rows.map((r, i) => `<div class="ir${r.want >= 0 ? ' w' : ''}${r.ban ? ' b' : ''}" data-i="${i}">
         <b class="no">${r.want >= 0 && L.order ? r.want + 1 : ''}</b><span class="nm">${htmlEsc(r.n)}</span>
-        <span class="s3"><button type="button" data-s="want" class="${r.want >= 0 ? 'on' : ''}" title="優先">🎯</button>${L.focus ? `<button type="button" data-s="focus" class="${r.focus ? 'on' : ''}" title="專注">★</button>` : ''}<button type="button" data-s="ban" class="${r.ban ? 'on' : ''}" title="放逐">✕</button></span>
+        <span class="s3"><button type="button" data-s="want" class="${r.want >= 0 ? 'on' : ''}" title="優先">🎯</button>${L.focus ? `<button type="button" data-s="focus" class="${r.focus ? 'on' : ''}" title="專注">★</button>` : ''}${L.ban !== false ? `<button type="button" data-s="ban" class="${r.ban ? 'on' : ''}" title="放逐">✕</button>` : ''}</span>
         ${L.order ? `<span class="mv"><button type="button" data-mv="-1"${r.want > 0 ? '' : ' disabled'}>▲</button><button type="button" data-mv="1"${r.want >= 0 && r.want < nW - 1 ? '' : ' disabled'}>▼</button></span>` : ''}
         ${r.del ? '<button type="button" class="del" data-del title="移除">🗑</button>' : '<span class="del"></span>'}</div>`).join('')
         || '<div class="hint">還沒有項目，從下面新增</div>';
