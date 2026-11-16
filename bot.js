@@ -6,7 +6,7 @@
   if (window.__roBot?.destroy) { try { window.__roBot.destroy(); } catch {} }
   const H = window.__roHook || (window.__roHook = { run: null, lobby: null, runs: 0, runSeq: 0, drops: 0, stuck: 0 });
   const BOT = (window.__roBot = {
-    version: '0.9.1',
+    version: '0.9.2',
     get run() { return H.run; },
     get lobby() { return H.lobby; },
     get runs() { return H.runs; }, set runs(v) { H.runs = v; },
@@ -32,7 +32,10 @@
   const DEITY_NAMES = ['堡壘之神', '記憶之神', '生命之神', '智慧之神', '思想之神', '力量之神', '戰爭之神', '疾風之神',
     '處刑之神', '貪婪之神', '束縛之神', '詭計之神', '折磨之神', '轉移神祇'];
   const QUALITY = ['傳說', '史詩', '稀有', '精良', '優良', '普通']; // best → worst（不確定的品質名稱排在後面）
-  const STAGES = ['普隆德拉原野', '普隆德拉地下水道', '失事輪', '柏伊亞嵐島', '斐揚森林', '斐揚洞穴', '普隆德拉城'];
+  const STAGES = ['普隆德拉原野', '普隆德拉地下水道', '失事輪', '柏伊亞嵐島', '斐揚森林', '斐揚洞穴', '普隆德拉城', '燈籠節'];
+  // v0.9.2 燈籠節（季節活動，關卡 louyang／洛陽）：不在遠征隊長的關卡清單，要找廣場的「節慶主持人」→ #festival 面板「開始遊戲」
+  const FEST = '燈籠節';
+  const isFest = () => cfg.stage === FEST;
   const DIFF = [
     { name: '敵人數量', min: 1, max: 3.5 },
     { name: '敵人傷害', min: 1, max: 1.75 },
@@ -859,6 +862,12 @@
       return void setTimeout(() => clickBtn(btnByText(/前往|出發|進入/, $('#npc-dialog') || document), rnd(1500, 2500)), rnd(300, 600)), wait(1200);
     }
 
+    // v0.9.2 燈籠節：節慶主持人面板 → 開始遊戲（扭蛋按鈕不碰）；開錯成隊長的關卡清單就關掉
+    if (isFest()) {
+      if (visible($('#festival'))) { const b = $('#festival-play'); if (visible(b) && !b.disabled) { log('燈籠節 → 開始遊戲'); return void clickBtn(b, rnd(1500, 2500)); } return; }
+      if (visible($('#stages'))) { clickBtn(btnByText(/取消|關閉|返回|✕/, $('#stages')) || $('#stages .x, #stages [class*=close]')); return; }
+    }
+
     // stage list
     const stages = $('#stages');
     if (visible(stages)) {
@@ -887,6 +896,9 @@
         const pb = $$('button', dlg).find((b) => visible(b) && b.classList.contains('primary'));
         if (pb) { log('未完成的一局 →', pb.innerText.trim()); return void clickBtn(pb, rnd(1500, 2500)); }
       }
+      // v0.9.2 出發前的設定（升級：立即／累積…）→ 按「前往野外」，照遊戲預設（立即）
+      const goField = $$('button', dlg).find((b) => visible(b) && /^前往野外$|^Ir al campo$|^Go to the field$/i.test(b.innerText.trim()));
+      if (goField) { log('出發 →', goField.innerText.trim()); return void clickBtn(goField, rnd(1500, 2500)); }
       if (/選擇大廳/.test(dlg.innerText)) {
         const last = $$('button,[role=button],li,div', dlg).filter((e) => visible(e) && /上次/.test(e.innerText) && e.innerText.length < 40).pop();
         if (last) return void clickBtn(last, rnd(1500, 2500));
@@ -894,11 +906,12 @@
       clickBtn(btnByText(/取消|關閉|離開/, dlg)); return;
     }
 
-    // talk to 遠征隊長
+    // talk to 遠征隊長（燈籠節：節慶主持人）
     const prompt = $('#lobby-prompt');
-    if (visible(prompt) && /隊長/.test(prompt.innerText)) return void clickBtn(prompt, rnd(800, 1200));
+    const who = isFest() ? /主持人|節慶|Anfitriona|Host/i : /隊長/;
+    if (visible(prompt) && who.test(prompt.innerText)) return void clickBtn(prompt, rnd(800, 1200));
     const L = BOT.lobby;
-    const cap = L?.npcs?.find((n) => /遠征隊長/.test(n.name || '') || n.id === 'captain');
+    const cap = L?.npcs?.find((n) => (isFest() ? n.id === 'festival' || /節慶主持人/.test(n.name || '') : /遠征隊長/.test(n.name || '') || n.id === 'captain'));
     if (cap && typeof L.moveTo === 'function') { L.moveTo(cap.x, cap.y); wait(2500); }
     else wait(1500);
   }
@@ -1766,7 +1779,8 @@
 
   <div class="pg" data-pg="stage">
     <div class="scope">關卡、難度跟著設定檔；其他共用</div>
-    <label>關卡 <select data-k="stage">${STAGES.map((s) => `<option>${s}</option>`).join('')}</select></label>
+    <label>關卡 <select data-k="stage">${STAGES.map((s) => `<option value="${s}">${s === FEST ? '燈籠節（季節活動）' : s}</option>`).join('')}</select></label>
+    <div class="hint" data-show="stage=燈籠節">燈籠節從廣場的「節慶主持人」進入；沒有難度可調，打王掉扭蛋（不掉裝備）</div>
     ${DIFF.map((d, i) => `<div class="r"><span>${d.name}</span><input type="range" data-k="diff.${i}" min="${d.min}" max="${d.max}" step="0.05"><span id="rb-dv${i}"></span></div>`).join('')}
     <label>打 ${NUM('maxRuns', 44)} 場後停止 <span class="hint">0＝不停</span></label>
     <label>結算後等 ${NUM('reenterDelay', 44, 0, 5)} 秒再進關</label>
