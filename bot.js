@@ -6,7 +6,7 @@
   if (window.__roBot?.destroy) { try { window.__roBot.destroy(); } catch {} }
   const H = window.__roHook || (window.__roHook = { run: null, lobby: null, runs: 0, runSeq: 0, drops: 0, stuck: 0 });
   const BOT = (window.__roBot = {
-    version: '0.9.4',
+    version: '0.9.5',
     get run() { return H.run; },
     get lobby() { return H.lobby; },
     get runs() { return H.runs; }, set runs(v) { H.runs = v; },
@@ -644,8 +644,11 @@
   }
   const swapText = (card) => card.querySelector('.pk-swap')?.textContent.replace(/\s+/g, ' ').trim() || '';
   const chestPri = () => [...(cfg.deityOn ? deityWant() : []), ...lines(cfg.chestPriority)]; // 目標神祇 = 最高優先
-  function chestScore(t, sw) {
-    const p = hit(chestPri(), t), q = QUALITY.findIndex((x) => t.includes(x));
+  // v0.9.5 dn＝神祇卡的名稱（不是神祇卡就是 null）：神祇名稱只比對神祇卡名稱。
+  // 以前比對整張卡（含說明行）→ 🎯 神祇「神聖之光」會命中說明寫著「神聖之光…」的普通寶箱卡，被當成目標選走並停止獵神
+  function chestScore(t, sw, dn = null) {
+    const W = cfg.deityOn ? deityWant() : [], di = dn == null ? -1 : hit(W, dn), ci = hit(cfg.chestPriority, t);
+    const p = di >= 0 ? di : ci >= 0 ? W.length + ci : -1, q = QUALITY.findIndex((x) => t.includes(x));
     let sc = (p >= 0 ? (100 - p) * 100 : 0) + (q >= 0 ? (10 - q) * 10 : 0);
     if (/\+\d/.test(t) && !t.includes('新！')) sc += 15;          // 精煉已有裝備
     if (sw) {
@@ -686,7 +689,7 @@
     // 2.5) 自訂步驟（寶箱：獵目標神祇）
     if (o.pre) { const r = o.pre({ cards, texts, swaps, can, use, short }); if (r) return r; }
     // 3) 評分；不滿意就重抽（先單張、再全部）
-    const scored = texts.map((t, i) => ({ i, t, ...o.score(t, swaps[i]) }));
+    const scored = texts.map((t, i) => ({ i, t, ...o.score(t, swaps[i], i) }));
     const best = scored.reduce((x, y) => (y.sc > x.sc ? y : x));
     if (!best.ok) {
       if (can('reroll_card')) {
@@ -726,6 +729,8 @@
     const dLim = limitFor('deity');
     const canD = (k) => cfg.deityOn && (perks[k] || 0) > 0 && (dUsed[k] || 0) < (dLim[k] || 0);
     const useD = (k, el, why) => { dUsed[k] = (dUsed[k] || 0) + 1; log('deity', why); clickBtn(el, rnd(500, 900)); return true; };
+    const dn = cards.map((c) => (isDeityCard(c) ? c.querySelector('.pk-name')?.textContent.replace(/\s+/g, ' ').trim() || '' : null));
+    const isWant = (i) => dn[i] != null && hit(want, dn[i]) >= 0;
     return perkTick(run, cards, {
       tag: 'chest', used, limit: limitFor('chest'), banish: cfg.chestBanish, focus: cfg.chestFocus,
       pre: ({ cards, texts, swaps, short }) => {
@@ -734,15 +739,15 @@
         for (let i = 0; i < cards.length; i++) {
           if (!isDeityCard(cards[i])) continue;
           // 不要的神祇 → 放逐
-          if (hit(ban, texts[i]) >= 0 && canD('banish')) { const b = actBtn(i, '放逐'); if (b) return useD('banish', b, `放逐 ${short(texts[i])}`); }
+          if (hit(ban, dn[i]) >= 0 && canD('banish')) { const b = actBtn(i, '放逐'); if (b) return useD('banish', b, `放逐 ${short(texts[i])}`); }
           // 目標神祇 → 專注（之後更常出現）
-          if (hit(want, texts[i]) >= 0 && !cards[i].querySelector('.pk-mark') && !dUsed.focused?.has(texts[i]) && canD('focus')) {
+          if (isWant(i) && !cards[i].querySelector('.pk-mark') && !dUsed.focused?.has(texts[i]) && canD('focus')) {
             const b = actBtn(i, '專注');
             if (b) { (dUsed.focused ||= new Set()).add(texts[i]); return useD('focus', b, `專注 ${short(texts[i])}`); }
           }
         }
         if (!want.length || huntDone()) return null;
-        if (texts.some((t) => hit(want, t) >= 0)) return null; // 目標出現 → 交給評分（目標＝最高優先）
+        if (cards.some((_, i) => isWant(i))) return null; // 目標出現 → 交給評分（目標＝最高優先）
         // 還沒拿到目標：神祇卡用「單張重抽」一直換（單張重抽在同部位重抽，所以還是神祇）
         if (canD('reroll_card')) {
           for (let i = 0; i < cards.length; i++) {
@@ -756,11 +761,11 @@
         }
         return null;
       },
-      onPick: (best) => { if (want.length && hit(want, best.t) >= 0) { used.huntDone = true; log('deity', '拿到目標', best.t); } },
-      score: (t, sw) => {
-        const r = chestScore(t, sw);
+      onPick: (best) => { if (want.length && isWant(best.i)) { used.huntDone = true; log('deity', '拿到目標', best.t); } },
+      score: (t, sw, i) => {
+        const r = chestScore(t, sw, dn[i]);
         // 不要的神祇：沒放逐掉也不要選（除非三張都更糟）
-        const bad = cfg.deityOn && hit(ban, t) >= 0 ? 5000 : 0;
+        const bad = cfg.deityOn && dn[i] != null && hit(ban, dn[i]) >= 0 ? 5000 : 0;
         return { sc: r.sc - bad, ok: r.sc - bad > 0 && (r.p >= 0 || (r.q >= 0 && r.q <= minQ)) };
       },
     });
