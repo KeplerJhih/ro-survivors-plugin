@@ -6,7 +6,7 @@
   if (window.__roBot?.destroy) { try { window.__roBot.destroy(); } catch {} }
   const H = window.__roHook || (window.__roHook = { run: null, lobby: null, runs: 0, runSeq: 0, drops: 0, stuck: 0 });
   const BOT = (window.__roBot = {
-    version: '0.8.7',
+    version: '0.8.8',
     get run() { return H.run; },
     get lobby() { return H.lobby; },
     get runs() { return H.runs; }, set runs(v) { H.runs = v; },
@@ -79,6 +79,7 @@
     deityOn: true,
     deity: {},             // { '堡壘之神': 'want', '折磨之神': 'ban', ... }
     deityExtra: [],        // 清單外的神祇（例：技能神祇）
+    deityOrder: [],        // v0.8.8 想要的神祇優先順序（名稱，越前面越優先；沒排到的照原本順序接在後面）
     deityUse: { reroll_card: 4, reroll: 0, banish: 2, focus: 1 }, // 每場最多用在神祇
     deityRerollAll: false, // 三張都沒有神祇時也重抽全部
     perks: { deity: { reroll_card: 4, reroll: 0, banish: 2, focus: 1 }, chest: { reroll_card: 2, reroll: 1, banish: 2, focus: 0 }, skill: { reroll_card: 0, reroll: 0, banish: 1, focus: 1 }, huntAll: true },
@@ -683,7 +684,12 @@
 
   // ── 神祇（獨立設定）──
   const DEITIES = DEITY_NAMES;
-  const deityWant = () => [...DEITIES.filter((d) => cfg.deity[d] === 'want'), ...lines(cfg.deityExtra)];
+  // v0.8.8 照「優先順序」排：越前面越優先（寶箱評分、取代保護都看這個順序 → 拿到後面的，之後出現前面的會換上去）
+  const deityWant = () => {
+    const a = [...new Set([...DEITIES.filter((d) => cfg.deity[d] === 'want'), ...lines(cfg.deityExtra)])], o = cfg.deityOrder || [];
+    const rank = (d) => { const i = o.indexOf(d); return i < 0 ? o.length + a.indexOf(d) : i; };
+    return a.sort((x, y) => rank(x) - rank(y));
+  };
   const deityBan = () => DEITIES.filter((d) => cfg.deity[d] === 'ban');
   const isDeityCard = (card) => (card.querySelector('.pk-sub')?.textContent || '').includes('神祇');
 
@@ -1615,6 +1621,12 @@
 #robot-panel .man-note{display:none;color:#c0392b}
 #robot-panel.manual .man-note{display:block}
 #robot-panel.manual .box.auto label{opacity:.45}
+#robot-panel .dorder{display:grid;gap:2px}
+#robot-panel .dor{display:flex;align-items:center;gap:5px;font-size:12px;padding:1px 4px;border:1px solid #dfe6f3;border-radius:4px;background:#fff}
+#robot-panel .dor b{color:#5b8def;min-width:12px}
+#robot-panel .dor span{flex:1}
+#robot-panel .dor button{all:unset;cursor:pointer;padding:0 5px;color:#456}
+#robot-panel .dor button[disabled]{opacity:.25;cursor:default}
 #robot-panel .gear{display:grid;gap:3px;border-top:1px dashed #d5dcea;padding-top:4px}
 #robot-panel .gchips{display:flex;flex-wrap:wrap;gap:3px}
 #robot-panel .gchip{all:unset;cursor:pointer;font-size:10px;line-height:16px;padding:0 6px;border:1px solid #c5d2ea;border-radius:8px;color:var(--c,#456);background:#fff}
@@ -1755,6 +1767,8 @@
       </div>
       <div class="h">其他想要的 <span class="hint">清單外，例：技能神祇</span></div>
       ${LIST('deityExtra', '一行一個', 34)}
+      <div class="h">優先順序 <span class="hint">越上面越優先；拿到後面的，之後出現前面的會換上去</span></div>
+      <div id="rb-dorder" class="dorder"></div>
       ${CHK('deityRerollAll', '三張都沒有神祇時也「重抽全部」')}
       <div class="h">每場最多用幾次</div>
       ${PERKROW('deity')}
@@ -1836,6 +1850,7 @@
       else { cfg.gate.on = false; cfg.mode = v; }
       BOT.anchor = null; save(); render(true);
     };
+    panel.querySelector('#rb-dorder').onclick = onDeityOrder;
     panel.querySelectorAll('.seg[data-d]').forEach((sg) => sg.querySelectorAll('button').forEach((b) => {
       b.onclick = () => { const v = b.dataset.v; if (v) cfg.deity[sg.dataset.d] = v; else delete cfg.deity[sg.dataset.d]; save(); render(); };
     }));
@@ -1921,8 +1936,27 @@
     } catch (e) { st.textContent = '重新載入失敗：' + e.message; }
   }
 
+  function renderDeityOrder() {
+    const box = panel?.querySelector('#rb-dorder');
+    if (!box) return;
+    const w = deityWant(), sig = w.join('|');
+    if (box.dataset.sig === sig) return;
+    box.dataset.sig = sig;
+    box.innerHTML = w.length ? w.map((d, i) => `<div class="dor"><b>${i + 1}</b><span>${d.replace(/</g, "&lt;")}</span>
+      <button type="button" data-mv="${i}:-1"${i ? '' : ' disabled'}>▲</button><button type="button" data-mv="${i}:1"${i < w.length - 1 ? '' : ' disabled'}>▼</button></div>`).join('')
+      : '<div class="hint">還沒有想要的神祇（上面按 🎯，或在「其他想要的」填）</div>';
+  }
+  function onDeityOrder(ev) {
+    const b = ev.target.closest?.('[data-mv]');
+    if (!b || b.disabled) return;
+    const [i, d] = b.dataset.mv.split(':').map(Number), w = deityWant(), j = i + d;
+    if (j < 0 || j >= w.length) return;
+    [w[i], w[j]] = [w[j], w[i]];
+    cfg.deityOrder = w; save(); renderDeityOrder();
+  }
   function render(full) {
     if (!panel) return;
+    renderDeityOrder();
     const g = (id) => panel.querySelector('#' + id);
     const act = document.activeElement;
     g('rb-ver').textContent = 'v' + BOT.version;
