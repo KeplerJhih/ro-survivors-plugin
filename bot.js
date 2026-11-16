@@ -6,7 +6,7 @@
   if (window.__roBot?.destroy) { try { window.__roBot.destroy(); } catch {} }
   const H = window.__roHook || (window.__roHook = { run: null, lobby: null, runs: 0, runSeq: 0, drops: 0, stuck: 0 });
   const BOT = (window.__roBot = {
-    version: '0.9.0',
+    version: '0.9.1',
     get run() { return H.run; },
     get lobby() { return H.lobby; },
     get runs() { return H.runs; }, set runs(v) { H.runs = v; },
@@ -84,7 +84,7 @@
     deityUse: { reroll_card: 4, reroll: 0, banish: 2, focus: 1 }, // 每場最多用在神祇
     deityRerollAll: false, // 三張都沒有神祇時也重抽全部
     perks: { deity: { reroll_card: 4, reroll: 0, banish: 2, focus: 1 }, chest: { reroll_card: 2, reroll: 1, banish: 2, focus: 0 }, skill: { reroll_card: 0, reroll: 0, banish: 1, focus: 1 }, huntAll: true },
-    gate: { on: false, deity: true, skillOn: false, skillTop: 1, skillLv: 1, after: 'idle' }, // 開局巡邏 → 掛機（勾的條件全部達成才切換）
+    gate: { on: false, deity: true, skillOn: false, skillTop: 1, skillLv: 1, skillMaxMin: 5, after: 'idle' }, // 開局巡邏 → 掛機（勾的條件全部達成才切換）；skillMaxMin：技能條件最多等幾分鐘（0＝一直等）
     huntPhase: { on: false, allPerks: true, after: 'idle', leftover: 'skill', onFail: 'farm' }, // 開局獵神 → 掛機；onFail: farm 直接掛機 / leave 離開這場
     huntPoorSec: 60,       // 獵神時開不起寶箱超過 N 秒 → 視為失敗（0=不判斷）
     huntLeaveChests: 0,    // 開了 N 個寶箱還沒拿到目標 → 放棄這場（0=不離開）
@@ -275,10 +275,17 @@
     const ok = conds.map((c) => { const id = skillIdOf(c.name); return !!id && skillLv(run, id) >= c.lv; });
     return ok.every(Boolean);
   }
+  // v0.9.1 技能條件逾時：整場都沒出現該技能（隨機）時，以前會一直巡邏到打王 → 第 N 分鐘就當作達成，切換掛機
+  function skillTimedOut() {
+    const m = +G().skillMaxMin || 0, t = BOT.run?.time || 0;
+    if (!m || t < m * 60) return false;
+    if (!BOT.rs.skillTimeout) { BOT.rs.skillTimeout = Math.round(t); log(`技能條件 ${m} 分鐘還沒達成 → 直接掛機`); }
+    return true;
+  }
   function gateDone() {
     const goals = [];
     if (deityGoal()) goals.push(deityReached());
-    if (skillGoal()) goals.push(skillsReached());
+    if (skillGoal()) goals.push(skillsReached() || skillTimedOut());
     if (!goals.length) return true;
     return goals.every(Boolean);
   }
@@ -946,7 +953,7 @@
       chests: run.chestsOpened || 0,
       deity,
       target: huntActive() ? (huntDone() ? 'yes' : 'no') : '', huntFail: rs.huntFailed || '',
-      huntAt: rs.huntAt != null ? Math.round(rs.huntAt) : null,
+      huntAt: rs.huntAt != null ? Math.round(rs.huntAt) : null, ...(rs.skillTimeout ? { skillTimeout: rs.skillTimeout } : {}),
       result, why: rs.leaveWhy || '', title,
       seq: H.runSeq,
       drops: (rs.drops || []).map((d) => `${d.q ? d.q + ' ' : ''}${d.name}`),
@@ -1672,7 +1679,7 @@
 #robot-panel .pg{display:none;gap:6px}
 #robot-panel .pg.on{display:grid}
 #robot-panel label{display:flex;align-items:center;flex-wrap:wrap;gap:2px 5px;white-space:nowrap}
-#robot-panel label>.hint{flex-basis:100%;padding-left:18px}
+#robot-panel label>.hint{flex-basis:100%;padding-left:18px;line-height:1.3;margin-top:-4px}
 #robot-panel select{flex:1;min-width:0;font:inherit}
 #robot-panel input[type=number]{font:inherit}
 #robot-panel textarea{width:100%;resize:vertical;font:inherit}
@@ -1681,7 +1688,7 @@
 #robot-panel .grid2{display:grid;grid-template-columns:1fr 1fr;gap:3px 8px}
 #robot-panel .box{padding:6px;background:#f3f6fc;border-radius:5px;display:grid;gap:5px}
 #robot-panel .h{font-weight:600;color:#2b3f66}
-#robot-panel .hint{font-size:11px;color:#778;white-space:normal}
+#robot-panel .hint{font-size:11px;color:#778;white-space:normal;text-align:left}
 #robot-panel .st{font-size:11px;color:#445;white-space:pre-line;background:#eef2fa;padding:5px 8px;border-top:1px solid #d5def0;border-radius:0 0 7px 7px}
 #robot-panel .btn{all:unset;cursor:pointer;text-align:center;padding:3px 6px;border:1px solid #9fb3d9;border-radius:4px;background:#fff}
 #robot-panel.min .pf,#robot-panel.min nav,#robot-panel.min .body{display:none}
@@ -1729,6 +1736,7 @@
         ${CHK('gate.skillOn', '學到技能優先序')}
         <div data-show="gate.skillOn" style="display:grid;gap:4px;padding-left:18px">
           <label>前 ${NUM('gate.skillTop', 38, 1)} 個都升到 Lv ${NUM('gate.skillLv', 38, 1)} 以上</label>
+          <label>最多等 ${NUM('gate.skillMaxMin', 38)} 分鐘 <span class="hint">沒出現這個技能時（隨機），時間到就直接掛機；0＝一直等</span></label>
           <div class="hint" id="rb-gskl"></div>
         </div>
       </div>
@@ -2062,7 +2070,7 @@
       (r ? `  怪 ${BOT.dbg?.enemies ?? '-'}  威脅 ${BOT.dbg?.threat ?? '-'}\n` +
            `HP ${r.hp != null ? Math.round(r.hp) + '/' + Math.round(r.stats?.maxHp ?? 0) : '-'}  zeny ${r.zeny ?? '-'}  卡住 ${BOT.stuck || 0}\n` +
            (ph !== 'normal' ? `${ph === 'hunt' ? '🔎 巡邏中' : '🧘 掛機中'}` +
-             (skillGoal() ? `  技能 ${skillsReached() ? '✓' : '…'}` : '') +
+             (skillGoal() ? `  技能 ${skillsReached() ? '✓' : BOT.rs?.skillTimeout ? '逾時' : '…'}` : '') +
              (deityGoal() ? `  神祇 ${huntDone() ? '✓' : BOT.rs?.huntFailed ? '放棄' : '…'}（寶箱 ${r.chestsOpened ?? 0}）` : '') : `模式：${effMode() === 'idle' ? '原地掛機' : '遊走'}`) +
            (effMode() === 'idle' && BOT.anchor && P ? `  離原點 ${Math.round(hyp(P.x - BOT.anchor.x, P.y - BOT.anchor.y))}${BOT.sweep ? ' 掃圈' : ''}` : '') + '\n'
          : '\n') +
