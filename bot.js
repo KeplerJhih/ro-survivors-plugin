@@ -6,7 +6,7 @@
   if (window.__roBot?.destroy) { try { window.__roBot.destroy(); } catch {} }
   const H = window.__roHook || (window.__roHook = { run: null, lobby: null, runs: 0, runSeq: 0, drops: 0, stuck: 0 });
   const BOT = (window.__roBot = {
-    version: '0.9.2',
+    version: '0.9.3',
     get run() { return H.run; },
     get lobby() { return H.lobby; },
     get runs() { return H.runs; }, set runs(v) { H.runs = v; },
@@ -36,6 +36,8 @@
   // v0.9.2 燈籠節（季節活動，關卡 louyang／洛陽）：不在遠征隊長的關卡清單，要找廣場的「節慶主持人」→ #festival 面板「開始遊戲」
   const FEST = '燈籠節';
   const isFest = () => cfg.stage === FEST;
+  const STAGE_ID = { louyang: FEST };
+  const stageOf = (run) => STAGE_ID[run?.stageId] || (cfg.loop ? cfg.stage : run?.stageId || '');
   const DIFF = [
     { name: '敵人數量', min: 1, max: 3.5 },
     { name: '敵人傷害', min: 1, max: 1.75 },
@@ -833,6 +835,7 @@
         const m = x.match(LASTRUN_Q);
         if (m) { const name = m[2].trim(), id = ids[gi++] || 0; return { q: m[1], name, kind: '裝備', stat: splitName(name)[1], ...(id ? { id, slot: slotOf(id) } : {}) }; }
         if (/ Card$/.test(x)) return { q: '', name: x, kind: '卡片' };
+        if (/扭蛋$|^Bola|Ball$/i.test(x)) return { q: '', name: x, kind: '扭蛋' };
         return null;
       }).filter(Boolean).map((d) => ({ at: Date.now(), seq: H.runSeq, stage, stats: '', src: '上一局補發', ...d }));
       if (got.length) { const a = loadDrops(); a.push(...got); saveDrops(a); log('上一局補發', got.length, '件', got.map((d) => `${d.q} ${d.name}`).join('、')); }
@@ -958,7 +961,7 @@
     const result = resultOf(title, run, rs);
     const e = {
       at: Date.now(),
-      stage: cfg.loop ? cfg.stage : (run.stageId || ''),
+      stage: stageOf(run),
       profile: STORE.activeProfile, job: run.classDef?.name || run.classDef?.id || '',
       time: Math.round(run.time || 0),
       level: run.level || 0,
@@ -981,6 +984,15 @@
   // ── 掉落紀錄：讀掉落展示 #drop-reveal 的 .dr-name / .dr-q / .dr-stats ──
   const DROP_KEY = 'roBot.drops';
   const loadDrops = () => { try { return JSON.parse(localStorage.getItem(DROP_KEY) || '[]'); } catch { return []; } };
+  try { // v0.9.3：以前把扭蛋記成寵物蛋，修正舊紀錄（掉落與場次）
+    if (!localStorage.getItem('roBot.fixBalls')) {
+      const fix = (x) => { if (x && x.kind === '蛋' && /扭蛋|Bola|Ball/i.test(x.name || '')) x.kind = '扭蛋'; };
+      const d = loadDrops(); d.forEach(fix); d.forEach((x) => { if (x.kind === '扭蛋') x.stage = FEST; }); localStorage.setItem(DROP_KEY, JSON.stringify(d));
+      // 扭蛋只有燈籠節會掉 → 有扭蛋的場次一定是燈籠節（手動進燈籠節時以前記成設定的關卡）
+      const lg = JSON.parse(localStorage.getItem('roBot.log') || '[]'); lg.forEach((e) => { (e.items || []).forEach(fix); if ((e.items || []).some((x) => x.kind === '扭蛋')) e.stage = FEST; }); localStorage.setItem('roBot.log', JSON.stringify(lg));
+      localStorage.setItem('roBot.fixBalls', '1');
+    }
+  } catch {}
   const saveDrops = (a) => { try { localStorage.setItem(DROP_KEY, JSON.stringify(a.slice(-1000))); } catch {} };
   H.sessionAt ||= performance.timeOrigin; // 本次掛機＝這次開啟頁面起
   function lootLens(run) { return [run.runLoot?.length || 0, run.runCards?.length || 0, run.runEggs?.length || 0]; }
@@ -1052,11 +1064,12 @@
     if (!imgs.length && (!note || /分配|等待|Repartiendo|Esperando|Distribut|Waiting/i.test(note))) return; // 還在分配
     BOT.rs.lootDone = true;
     if (!imgs.length) BOT.rs.lootNote = note; // 沒掉落／寄到郵差／伺服器沒回應
-    const stage = cfg.loop ? cfg.stage : run.stageId || '';
+    const stage = stageOf(run);
     const got = imgs.map((i) => {
       const t = (i.title || '').trim(), m = t.match(/^(.*) \(([^()]+)\)$/);
       if (i.classList.contains('cardimg')) return { name: t, q: '', kind: '卡片' };
       const id = +((i.getAttribute('src') || '').match(/items\/(\d+)\./)?.[1] || 0);
+      if (!m && /扭蛋|Bola|Ball/i.test(t)) return { name: t, q: '', kind: '扭蛋' }; // v0.9.3 燈籠節打王掉的扭蛋（結算時直接進帳號，不用撿）
       return m ? { name: m[1], q: m[2], kind: '裝備', slot: slotOf(id), stat: splitName(m[1])[1], id } : { name: t, q: '', kind: '蛋' };
     }).filter((d) => d.name).map((d) => ({ at: Date.now(), seq: H.runSeq, stage, stats: '', ...d }));
     // 對上伺服器回應：畫面裝備的順序＝granted.gear 的順序
@@ -1089,7 +1102,7 @@
     const kind = now[1] > prev[1] ? '卡片' : now[2] > prev[2] ? '蛋' : now[0] > prev[0] ? '裝備' : '其他';
     BOT.lens = now;
     const stats = [...dr.querySelectorAll('.dr-stats > *')].map((e) => e.textContent.trim()).filter(Boolean).slice(0, 4).join(' · ');
-    const e = { at: Date.now(), seq: H.runSeq, stage: cfg.loop ? cfg.stage : run.stageId || '', name, q, kind, stats };
+    const e = { at: Date.now(), seq: H.runSeq, stage: stageOf(run), name, q, kind, stats };
     (BOT.rs.drops ||= []).push(e);
     const a = loadDrops(); a.push(e); saveDrops(a);
     log('掉落', kind, q, name, stats);
@@ -1254,6 +1267,7 @@
       const gear = it.filter((x) => x.kind === '裝備').sort((x, y) => qi(x) - qi(y));
       const cards = it.filter((x) => x.kind === '卡片').map((x) => x.name.replace(/ Card$/, ''));
       const eggs = it.filter((x) => x.kind === '蛋').length;
+      const balls = it.filter((x) => x.kind === '扭蛋').reduce((o, x) => ((o[x.name] = (o[x.name] || 0) + 1), o), {});
       const col = e.result === '死亡' ? '#c0392b' : e.result === '放棄' ? '#b9770e' : e.result === '通關' ? '#1e8449' : '#666';
       const bq = gear[0]?.q;
       const body = gear.map((x) => { const [base] = splitName(x.name);
@@ -1261,6 +1275,7 @@
         return `<div style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="color:${QCOL[x.q] || '#333'}">${x.q}</span> <span class="hint">${x.slot || ''}</span> ${x.refine ? '+' + x.refine + ' ' : ''}${base}${x.aff ? ` <b>${x.aff}</b>` : x.stat ? ` <b>+${x.stat}</b>` : ''}${ij ? ` <span class="hint">${jobsText(ij.j)}</span>` : ''}</div>`; }).join('')
         + (cards.length ? `<div style="font-size:11px"><span class="hint">卡片</span> ${cards.join('・')}</div>` : '')
         + (eggs ? `<div style="font-size:11px"><span class="hint">寵物蛋</span> ×${eggs}</div>` : '')
+        + (Object.keys(balls).length ? `<div style="font-size:11px"><span class="hint">扭蛋</span> ${Object.entries(balls).map(([k, n]) => `${k} ×${n}`).join('・')}</div>` : '')
         || `<div class="hint">${e.lootNote || (e.myst ? '沒抓到結算物品' : '沒有掉落')}</div>`;
       return `<details class="run"${open ? ' open' : ''}><summary style="font-size:11px"><span class="hint">${hm(e.at)}</span> ${(e.stage || '').slice(0, 6)} <span style="color:${col}">${e.result}</span> ${mmss(e.time)}
         <span style="float:right;color:${QCOL[bq] || '#666'}">${e.myst ? `裝備 ${e.myst[0]}・卡 ${e.myst[1]}` : it.length ? `${it.length} 件` : ''}</span></summary>
