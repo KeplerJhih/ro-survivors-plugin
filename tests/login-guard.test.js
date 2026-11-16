@@ -4,7 +4,7 @@ const PAGE = (o) => `<html><head><meta charset="utf-8"></head><body>
   ${o.maint ? '<div id="maint"><button class="sp-maint-retry">重新檢查</button></div>' : ''}
   ${o.login ? '<form id="sp-login"><input name="username"><input type="password" name="password"><button type="submit">進入</button><p class="sp-error"></p></form>' : ''}
   ${o.charsel ? '<div id="charselect"><div id="slots"><div class="slot selected"><div class="slot-name">阿服快打</div></div></div><button id="btn-play">開始遊戲</button></div>' : ''}
-  ${o.queue ? '<div class="ro-window">伺服器已滿 你正在排隊：第 5 位</div>' : ''}
+  ${o.queue ? '<div class="ro-window">伺服器已滿 目前有 20,000 名玩家。你正在排隊：一有空位就會自動進入。 第 4,630 位，共 10,442 位 <button>取消</button></div>' : ''}
   <div id="lobby-ui" style="display:none"></div>
 </body></html>`;
 async function open(b, o, guard) {
@@ -73,6 +73,14 @@ async function open(b, o, guard) {
   ({ p, errs } = await open(b, { charsel: true, queue: true }, { n: 1, win: now - 60000, next: now, steps: [], pw: [] }));
   await p.waitForTimeout(5000);
   ok((await ev(p)).length === 0 && (await g(p)).n === 1, '排隊中：什麼都不按 ' + JSON.stringify(await ev(p)));
+  ok(/伺服器額滿排隊中：第 4,630 位／共 10,442 位/.test(await st(p)), '狀態列顯示排隊名次 ' + (await st(p)).split('\n')[0]);
+  ok(!errs.length, 'no page errors ' + errs.join(';')); await p.close();
+
+  // 6b) 打完一場後被丟去排隊（hook 的 run 還停在 over、沒有選角／標題）：不算在關卡、什麼都不按
+  ({ p, errs } = await open(b, { queue: true }, { n: 1, win: now - 60000, next: now, steps: ['play'], pw: [] }));
+  await p.evaluate(() => { window.__roHook.run = { state: 'over', time: 877, player: { x: 0, y: 0 }, touchMove: { x: 0, y: 0 } }; });
+  await p.waitForTimeout(3000);
+  ok((await ev(p)).length === 0 && /排隊中/.test(await st(p)) && !/關卡中/.test(await st(p)), '上一場停在 over＋排隊：狀態列顯示排隊、不是關卡中 ' + (await st(p)).split('\n')[0]);
   ok(!errs.length, 'no page errors ' + errs.join(';')); await p.close();
 
   // 7) 進到大廳：歸零（保留密碼紀錄）
