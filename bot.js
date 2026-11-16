@@ -1645,7 +1645,7 @@
 #robot-panel .ir button[data-s=ban].on{background:#d9534f}
 #robot-panel .ir .mv button{opacity:.8}
 #robot-panel .ir .mv button[disabled]{opacity:.15;cursor:default}
-#robot-panel .ir .del{opacity:.5;min-width:18px}
+#robot-panel .ir .del{opacity:.5;width:22px;padding:0;text-align:center;box-sizing:border-box;flex:none}
 #robot-panel .il-add{display:flex;gap:4px}
 #robot-panel .il-add input{flex:1;min-width:0}
 #robot-panel .il-add button{all:unset;cursor:pointer;padding:0 6px;border:1px solid #9fb3d9;border-radius:4px;background:#fff;font-size:12px}
