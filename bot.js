@@ -6,7 +6,7 @@
   if (window.__roBot?.destroy) { try { window.__roBot.destroy(); } catch {} }
   const H = window.__roHook || (window.__roHook = { run: null, lobby: null, runs: 0, runSeq: 0, drops: 0, stuck: 0 });
   const BOT = (window.__roBot = {
-    version: '0.9.5',
+    version: '0.9.6',
     get run() { return H.run; },
     get lobby() { return H.lobby; },
     get runs() { return H.runs; }, set runs(v) { H.runs = v; },
@@ -782,8 +782,13 @@
     }
     if (learned) try { localStorage.setItem('roBot.skillMap', JSON.stringify(SKMAP)); } catch {}
     const pri = cfg.priority;
+    // v0.9.6 獵神勾「全部先給神祇」時技能沒有次數 → 三張都在放逐名單只能硬選一張被禁的。
+    // 這種時候照「重抽」表給技能的次數放逐掉（其他情況仍留給神祇）
+    const nameOf = (c) => c.querySelector('.pk-name')?.textContent.replace(/\s+/g, ' ').trim() || '';
+    let limit = limitFor('skill');
+    if (cfg.skillBanish?.length && cards.every((c) => hit(cfg.skillBanish, nameOf(c)) >= 0)) limit = { ...limit, banish: Math.max(limit.banish || 0, cfg.perks.skill?.banish || 0) };
     return perkTick(run, cards, {
-      tag: 'skill', used: BOT.skillUsed, limit: limitFor('skill'),
+      tag: 'skill', used: BOT.skillUsed, limit,
       // 技能只比對「技能名稱」：說明文字常提到別的技能（例如緩速術的說明寫著「神聖之光…傷害 +30%」），
       // 用整張卡比對會誤判成命中神聖之光（v0.4.8 修正）
       textOf: (c) => [c.querySelector('.pk-name')?.textContent, c.querySelector('.pk-ribbon')?.textContent].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim() || cardText(c),
