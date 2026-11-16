@@ -6,7 +6,7 @@
   if (window.__roBot?.destroy) { try { window.__roBot.destroy(); } catch {} }
   const H = window.__roHook || (window.__roHook = { run: null, lobby: null, runs: 0, runSeq: 0, drops: 0, stuck: 0 });
   const BOT = (window.__roBot = {
-    version: '0.8.8',
+    version: '0.8.10',
     get run() { return H.run; },
     get lobby() { return H.lobby; },
     get runs() { return H.runs; }, set runs(v) { H.runs = v; },
@@ -80,6 +80,7 @@
     deity: {},             // { '堡壘之神': 'want', '折磨之神': 'ban', ... }
     deityExtra: [],        // 清單外的神祇（例：技能神祇）
     deityOrder: [],        // v0.8.8 想要的神祇優先順序（名稱，越前面越優先；沒排到的照原本順序接在後面）
+    deitySwapUp: false,    // v0.8.10 已拿到想要的神祇後，出現更優先的也換上去（換了原本的精煉 +N 會歸零 → 預設不換）
     deityUse: { reroll_card: 4, reroll: 0, banish: 2, focus: 1 }, // 每場最多用在神祇
     deityRerollAll: false, // 三張都沒有神祇時也重抽全部
     perks: { deity: { reroll_card: 4, reroll: 0, banish: 2, focus: 1 }, chest: { reroll_card: 2, reroll: 1, banish: 2, focus: 0 }, skill: { reroll_card: 0, reroll: 0, banish: 1, focus: 1 }, huntAll: true },
@@ -354,14 +355,17 @@
   const VISIT = new Map();
   const vkey = (x, y) => `${Math.floor(x / 400)},${Math.floor(y / 400)}`;
   function markVisited(P) { VISIT.set(vkey(P.x, P.y), Date.now()); }
+  // v0.8.9 獵神（開局）時：短程（300～800）、找「離怪群約 350」的位置繞，邊走邊打；
+  // 以前一律 600～1600 而且偏好遠離怪群 → 開局 72% 時間在長途閒晃，60 秒只殺 50 多隻（原地掛機 5 秒就殺 140 隻）
   function newWanderTarget(run, P) {
     const b = run.bounds || { x0: P.x - 1600, x1: P.x + 1600, y0: P.y - 1600, y1: P.y + 1600 };
+    const near = huntingDeity();
     let cx = 0, cy = 0, n = 0;
-    for (const e of run.enemies || []) if (!e.dead && hyp(e.x - P.x, e.y - P.y) < 600) { cx += e.x; cy += e.y; n++; }
+    for (const e of run.enemies || []) if (!e.dead && hyp(e.x - P.x, e.y - P.y) < (near ? 900 : 600)) { cx += e.x; cy += e.y; n++; }
     const now = Date.now();
     let best = null, bs = -Infinity;
     for (let i = 0; i < 14; i++) {
-      const a = Math.random() * Math.PI * 2, r = rnd(600, 1600);
+      const a = Math.random() * Math.PI * 2, r = near ? rnd(300, 800) : rnd(600, 1600);
       let x = Math.min(b.x1, Math.max(b.x0, P.x + Math.cos(a) * r)), y = Math.min(b.y1, Math.max(b.y0, P.y + Math.sin(a) * r));
       try {
         if (run.walk) {
@@ -372,7 +376,8 @@
       const seen = VISIT.get(vkey(x, y));
       const fresh = seen ? Math.min(60, (now - seen) / 1000) / 60 : 1.2; // 沒去過最好，60 秒以上沒去過也算新
       const away = n ? Math.min(1, hyp(x - cx / n, y - cy / n) / 1200) : 0.5;
-      const sc = fresh * 2 + away + Math.random() * 0.2;
+      const close = n ? 1 - Math.min(1, Math.abs(hyp(x - cx / n, y - cy / n) - 350) / 700) : 0.5;
+      const sc = (near ? fresh + close * 2 : fresh * 2 + away) + Math.random() * 0.2;
       if (sc > bs) { bs = sc; best = { x, y, wander: true }; }
     }
     steer.target = best || { x: P.x, y: P.y, wander: true };
@@ -438,6 +443,8 @@
     for (const o of cand) {
       let v = o.kind === 'meat' && lowHp ? 8 : VALUE[o.kind] ?? 1;
       if (o.kind === 'zeny' && hunt) v = 1 + (o.value || 0) / 8; // 獵神期間錢＝開寶箱，依金額加權
+      const gem = hunt && o.kind?.startsWith('gem');
+      if (gem) v *= 2; // v0.8.9 開局升級＝技能／火力，經驗比平常值錢
       if (v <= 3) { // 小東西看群聚：附近越多越值得
         let n = 0;
         for (const q of cand) if (q !== o && Math.abs(q.x - o.x) < 140 && Math.abs(q.y - o.y) < 140 && ++n >= 12) break;
@@ -445,7 +452,7 @@
       }
       const ty = o.y + (o.kind === 'chest' ? 20 : 0);
       // 寶箱只能「走到上面」才會開（判定點在角色腳下往上 20），所以危險度扣分較少，盡量去開
-      const sc = v - (o.kind === 'chest' ? 1.5 : 4) * dangerAt(o.x, ty) - hyp(o.x - P.x, ty - P.y) / 150 + (cur?.obj === o ? 2 : 0);
+      const sc = v - (o.kind === 'chest' ? 1.5 : 4) * dangerAt(o.x, ty) - hyp(o.x - P.x, ty - P.y) / (gem ? 400 : 150) + (cur?.obj === o ? 2 : 0);
       if (sc > bs) { bs = sc; best = { x: o.x, y: ty, obj: o }; }
     }
     if (best) {
@@ -629,7 +636,9 @@
     if (/\+\d/.test(t) && !t.includes('新！')) sc += 15;          // 精煉已有裝備
     if (sw) {
       const ps = hit(chestPri(), sw);                               // 會被換掉的那件
-      if (ps >= 0 && (p < 0 || ps <= p)) sc -= 100000;             // 絕不拿優先序較低的東西換掉想要的裝備
+      const ownD = cfg.deityOn && hit(deityWant(), sw) >= 0;        // 會被換掉的是已拿到的目標神祇
+      if (ownD && !cfg.deitySwapUp) sc -= 100000;                  // v0.8.10 預設不換：換了精煉 +N 會歸零
+      else if (ps >= 0 && (p < 0 || ps <= p)) sc -= 100000;        // 絕不拿優先序較低的東西換掉想要的裝備
       else if (cfg.chestAvoidSwap && p < 0) sc -= 25;              // 一般取代：小扣分
     }
     return { sc, p, q };
@@ -1767,8 +1776,9 @@
       </div>
       <div class="h">其他想要的 <span class="hint">清單外，例：技能神祇</span></div>
       ${LIST('deityExtra', '一行一個', 34)}
-      <div class="h">優先順序 <span class="hint">越上面越優先；拿到後面的，之後出現前面的會換上去</span></div>
+      <div class="h">優先順序 <span class="hint">越上面越優先（同時出現時選上面的）</span></div>
       <div id="rb-dorder" class="dorder"></div>
+      ${CHK('deitySwapUp', '已拿到後，出現更優先的也換上去', '換了原本的精煉 +N 會歸零')}
       ${CHK('deityRerollAll', '三張都沒有神祇時也「重抽全部」')}
       <div class="h">每場最多用幾次</div>
       ${PERKROW('deity')}

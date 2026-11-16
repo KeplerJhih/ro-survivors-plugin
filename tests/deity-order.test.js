@@ -1,15 +1,15 @@
 // v0.8.8：神祇優先順序——寶箱分頁列出想要的神祇（🎯＋其他想要的），▲▼ 排序；選卡照順序；拿到後面的，出現前面的會換上去
 const { chromium } = require('playwright');
 const card = (i, badge, name, sub, line, swap) => `<div class="pk-slot"><div class="pk-pop"><button class="pk-card" data-i="${i}"><span class="pk-key">${i + 1}</span><span class="pk-badge">${badge}</span><b class="pk-name">${name}</b><small class="pk-sub">${sub}</small><ul class="pk-lines"><li>${line}</li></ul>${swap ? `<span class="pk-swap"><span class="pk-swap-ico">⇄</span><span>取代 ${swap}</span></span>` : ''}</button>${swap ? `<div class="pk-back"><div class="pk-back-btns"><button class="ro-btn primary" data-yes>是，交換</button><button data-no>否</button></div></div>` : ''}<div class="pk-acts"></div></div></div>`;
-async function open(b, order, cards) {
+async function open(b, order, cards, extra = {}) {
   const p = await b.newPage({ viewport: { width: 900, height: 1000 } }); const errs = []; p.on('pageerror', e => errs.push(e.message));
   await p.route('https://ro-survivors.com/', r => r.fulfill({ contentType: 'text/html; charset=utf-8', body: `<html><head><meta charset="utf-8"></head><body>${cards ? `<div id="pk-cards">${cards}</div>` : ''}</body></html>` }));
-  await p.addInitScript(([order, picking]) => {
+  await p.addInitScript(([order, picking, extra]) => {
     localStorage.setItem('roBot.cfg', JSON.stringify({ fight: false, pick: picking, loop: false, v: 3, tab: 'chest', activeProfile: 'A',
-      profiles: { A: { deityOn: true, deity: { '堡壘之神': 'want', '記憶之神': 'ban' }, deityExtra: ['神聖之光'], ...(order ? { deityOrder: order } : {}) } } }));
+      profiles: { A: { deityOn: true, deity: { '堡壘之神': 'want', '記憶之神': 'ban' }, deityExtra: ['神聖之光'], ...(order ? { deityOrder: order } : {}), ...extra } } }));
     window.__roHook = { run: picking ? { state: 'levelup', openingChest: {}, player: { x: 0, y: 0 }, perksLeft: {}, touchMove: { x: 0, y: 0 }, classDef: { id: 'acolyte' } } : null, lobby: null, runs: 1, runSeq: 1, drops: 0, stuck: 0 };
     window.__clicks = []; document.addEventListener('click', (e) => { const c = e.target.closest('.pk-card'); if (c) window.__clicks.push(c.querySelector('.pk-name').textContent); }, true);
-  }, [order, !!cards]);
+  }, [order, !!cards, extra]);
   await p.goto('https://ro-survivors.com/');
   await p.addScriptTag({ path: require('path').join(__dirname, '..', 'bot.js') });
   await p.waitForTimeout(1500);
@@ -41,13 +41,18 @@ async function open(b, order, cards) {
   ok((await p.evaluate(() => window.__clicks))[0] === '堡壘之神', '堡壘之神排第一 → 選堡壘之神 ' + JSON.stringify(await p.evaluate(() => window.__clicks)));
   await p.close();
 
-  // 3) 已裝備後面的（堡壘之神），出現前面的（神聖之光）→ 換上去；反過來不換
+  // 3) 已裝備後面的（堡壘之神，可能已精煉 +30），出現前面的（神聖之光）：
+  //    v0.8.10 預設不換（換了精煉會歸零）；勾「已拿到後也換」才換；排在後面的永遠不拿來換前面的
   const up = card(0, '稀有', '神聖之光 Deity', '神祇', '+10% 神聖之光', '堡壘之神') + card(1, '普通', 'DEX 料理', '料理', '+4 DEX') + card(2, '普通', '護甲藥水', '藥水', '+2 護甲');
   ({ p, errs } = await open(b, ['神聖之光', '堡壘之神'], up));
-  ok((await p.evaluate(() => window.__clicks))[0] === '神聖之光 Deity', '出現更優先的 → 換上去');
+  ok((await p.evaluate(() => window.__clicks))[0] !== '神聖之光 Deity', '預設：已拿到的不換（保住精煉） ' + JSON.stringify(await p.evaluate(() => window.__clicks)));
+  ok(await p.evaluate(() => !!document.querySelector('input[data-k="deitySwapUp"]') && !document.querySelector('input[data-k="deitySwapUp"]').checked), '面板有開關，預設不勾');
   await p.close();
-  ({ p, errs } = await open(b, ['堡壘之神', '神聖之光'], up));
-  ok((await p.evaluate(() => window.__clicks))[0] !== '神聖之光 Deity', '出現較後面的 → 不拿它換掉前面的 ' + JSON.stringify(await p.evaluate(() => window.__clicks)));
+  ({ p, errs } = await open(b, ['神聖之光', '堡壘之神'], up, { deitySwapUp: true }));
+  ok((await p.evaluate(() => window.__clicks))[0] === '神聖之光 Deity', '勾選後：出現更優先的 → 換上去');
+  await p.close();
+  ({ p, errs } = await open(b, ['堡壘之神', '神聖之光'], up, { deitySwapUp: true }));
+  ok((await p.evaluate(() => window.__clicks))[0] !== '神聖之光 Deity', '勾選後：出現較後面的 → 不換 ' + JSON.stringify(await p.evaluate(() => window.__clicks)));
   ok(!errs.length, 'no page errors ' + errs.join(';')); await p.close();
 
   console.log(fail ? `FAILED ${fail}` : 'ALL PASS');
