@@ -18,17 +18,19 @@ async function open(b, order, cards, extra = {}) {
 (async () => {
   const b = await chromium.launch();
   let fail = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); if (!c) fail++; };
-  const list = (p) => p.evaluate(() => [...document.querySelectorAll('#rb-dorder .dor span')].map((s) => s.textContent));
+  // v0.9.0 統一清單：🎯 列就是優先順序
+  const list = (p) => p.evaluate(() => [...document.querySelectorAll('.il[data-il=deity] .ir.w .nm')].map((s) => s.textContent));
+  const btn = (p, n, sel) => p.evaluate(([n, sel]) => [...document.querySelectorAll('.il[data-il=deity] .ir')].find((r) => r.querySelector('.nm').textContent === n).querySelector(sel).click(), [n, sel]);
 
   // 1) 面板：列出想要的（不含 ✕），預設照原本順序；▼ 調整後存進設定檔
   let { p, errs } = await open(b, null, null);
   ok(JSON.stringify(await list(p)) === '["堡壘之神","神聖之光"]', '列出 🎯 與其他想要的（不含 ✕）' + JSON.stringify(await list(p)));
-  ok(await p.evaluate(() => document.querySelector('#rb-dorder [data-mv="0:-1"]').disabled && document.querySelector('#rb-dorder [data-mv="1:1"]').disabled), '第一個不能再上、最後一個不能再下');
-  await p.evaluate(() => document.querySelector('#rb-dorder [data-mv="0:1"]').click()); await p.waitForTimeout(300);
+  ok(await p.evaluate(() => { const w = [...document.querySelectorAll('.il[data-il=deity] .ir.w')]; return w[0].querySelector('[data-mv="-1"]').disabled && w[w.length - 1].querySelector('[data-mv="1"]').disabled; }), '第一個不能再上、最後一個不能再下');
+  await btn(p, '堡壘之神', '[data-mv="1"]'); await p.waitForTimeout(300);
   ok(JSON.stringify(await list(p)) === '["神聖之光","堡壘之神"]', '按 ▼ 後順序對調');
   ok(JSON.stringify(await p.evaluate(() => JSON.parse(localStorage.getItem('roBot.cfg')).profiles.A.deityOrder)) === '["神聖之光","堡壘之神"]', '順序存在設定檔');
   // 新增一個 🎯 → 接在最後
-  await p.evaluate(() => document.querySelector('.seg[data-d="生命之神"] button[data-v=want]').click()); await p.waitForTimeout(700);
+  await btn(p, '生命之神', '[data-s=want]'); await p.waitForTimeout(700);
   ok(JSON.stringify(await list(p)) === '["神聖之光","堡壘之神","生命之神"]', '新加的 🎯 接在最後 ' + JSON.stringify(await list(p)));
   ok(!errs.length, 'no page errors ' + errs.join(';')); await p.close();
 

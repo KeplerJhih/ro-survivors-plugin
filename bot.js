@@ -6,7 +6,7 @@
   if (window.__roBot?.destroy) { try { window.__roBot.destroy(); } catch {} }
   const H = window.__roHook || (window.__roHook = { run: null, lobby: null, runs: 0, runSeq: 0, drops: 0, stuck: 0 });
   const BOT = (window.__roBot = {
-    version: '0.8.10',
+    version: '0.9.0',
     get run() { return H.run; },
     get lobby() { return H.lobby; },
     get runs() { return H.runs; }, set runs(v) { H.runs = v; },
@@ -145,6 +145,8 @@
         if (v !== undefined && !Array.isArray(v)) pf[k] = (v && typeof v === 'object') ? (Object.values(v).find((a) => Array.isArray(a) && a.length) || []) : [];
       }
       if (!pf.gate && pf.huntPhase) pf.gate = { on: !!pf.huntPhase.on, deity: true, after: pf.huntPhase.after || 'idle' };
+      // v0.9.0：自訂神祇也放進 deity 表（want／ban／none），以前「其他想要的」一律是想要
+      for (const n of pf.deityExtra || []) if (n && !(pf.deity ||= {})[n]) pf.deity[n] = 'want';
       // v0.7：三處的「每場最多用幾次」合併成一張表
       if (!pf.perks) {
         const z = { reroll_card: 0, reroll: 0, banish: 0, focus: 0 };
@@ -695,11 +697,11 @@
   const DEITIES = DEITY_NAMES;
   // v0.8.8 照「優先順序」排：越前面越優先（寶箱評分、取代保護都看這個順序 → 拿到後面的，之後出現前面的會換上去）
   const deityWant = () => {
-    const a = [...new Set([...DEITIES.filter((d) => cfg.deity[d] === 'want'), ...lines(cfg.deityExtra)])], o = cfg.deityOrder || [];
+    const a = [...new Set([...DEITIES, ...lines(cfg.deityExtra)])].filter((d) => cfg.deity[d] === 'want'), o = cfg.deityOrder || [];
     const rank = (d) => { const i = o.indexOf(d); return i < 0 ? o.length + a.indexOf(d) : i; };
     return a.sort((x, y) => rank(x) - rank(y));
   };
-  const deityBan = () => DEITIES.filter((d) => cfg.deity[d] === 'ban');
+  const deityBan = () => [...new Set([...DEITIES, ...lines(cfg.deityExtra)])].filter((d) => cfg.deity[d] === 'ban');
   const isDeityCard = (card) => (card.querySelector('.pk-sub')?.textContent || '').includes('神祇');
 
   function chestTick(run, cards) {
@@ -1594,7 +1596,8 @@
     return neg ? !ok : ok;
   }
 
-  const SEC = (title, body, open) => `<details class="dt" data-dt="${title}"${open ? ' open' : ''}><summary>${title}</summary><div class="dtb">${body}</div></details>`;
+  const SEC = (title, body, open, scope = '') => `<details class="dt" data-dt="${title}"${open ? ' open' : ''}><summary>${title}${scope ? `<span class="scope">${scope}</span>` : ''}</summary><div class="dtb">${body}</div></details>`;
+  const LEGEND = (want = '優先，越上面越先', focus = '專注，之後更常出現', ban = '放逐，絕不選') => `<div class="hint ileg">🎯 ${want}${focus ? `　★ ${focus}` : ''}　✕ ${ban}</div>`;
   const NUM = (k, w = 44, min = 0, step = 1) => `<input type="number" data-k="${k}" min="${min}" step="${step}" style="width:${w}px">`;
   const CHK = (k, label, hint = '') => `<label><input type="checkbox" data-k="${k}">${label}${hint ? ` <span class="hint">${hint}</span>` : ''}</label>`;
   const RADIO = (k, opts) => opts.map(([v, t]) => `<label><input type="radio" name="rb-${k}" data-k="${k}" value="${v}">${t}</label>`).join('');
@@ -1630,6 +1633,23 @@
 #robot-panel .man-note{display:none;color:#c0392b}
 #robot-panel.manual .man-note{display:block}
 #robot-panel.manual .box.auto label{opacity:.45}
+#robot-panel .il{display:grid;gap:3px}
+#robot-panel .il-rows{display:grid;gap:2px}
+#robot-panel .ir{display:flex;align-items:center;gap:4px;font-size:12px;padding:1px 4px;border:1px solid #dfe6f3;border-radius:4px;background:#fff}
+#robot-panel .ir.w{border-color:#b9cdf3;background:#f3f7ff}
+#robot-panel .ir.b .nm{color:#999;text-decoration:line-through}
+#robot-panel .ir .no{color:#5b8def;min-width:14px;font-size:11px}
+#robot-panel .ir .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
+#robot-panel .ir button{all:unset;cursor:pointer;padding:0 4px;line-height:18px;border-radius:3px;color:#456;opacity:.35}
+#robot-panel .ir button.on{opacity:1;background:#5b8def;color:#fff}
+#robot-panel .ir button[data-s=ban].on{background:#d9534f}
+#robot-panel .ir .mv button{opacity:.8}
+#robot-panel .ir .mv button[disabled]{opacity:.15;cursor:default}
+#robot-panel .ir .del{opacity:.5;min-width:18px}
+#robot-panel .il-add{display:flex;gap:4px}
+#robot-panel .il-add input{flex:1;min-width:0}
+#robot-panel .il-add button{all:unset;cursor:pointer;padding:0 6px;border:1px solid #9fb3d9;border-radius:4px;background:#fff;font-size:12px}
+#robot-panel details.dt>summary .scope{float:right;margin-left:6px}
 #robot-panel .dorder{display:grid;gap:2px}
 #robot-panel .dor{display:flex;align-items:center;gap:5px;font-size:12px;padding:1px 4px;border:1px solid #dfe6f3;border-radius:4px;background:#fff}
 #robot-panel .dor b{color:#5b8def;min-width:12px}
@@ -1651,7 +1671,8 @@
 #robot-panel .body{overflow-y:auto;min-height:0;flex:1;padding:6px 8px}
 #robot-panel .pg{display:none;gap:6px}
 #robot-panel .pg.on{display:grid}
-#robot-panel label{display:flex;align-items:center;gap:5px;white-space:nowrap}
+#robot-panel label{display:flex;align-items:center;flex-wrap:wrap;gap:2px 5px;white-space:nowrap}
+#robot-panel label>.hint{flex-basis:100%;padding-left:18px}
 #robot-panel select{flex:1;min-width:0;font:inherit}
 #robot-panel input[type=number]{font:inherit}
 #robot-panel textarea{width:100%;resize:vertical;font:inherit}
@@ -1704,16 +1725,7 @@
         <option value="roam">一直遊走</option></select></label>
       <div data-show="gate.on" style="display:grid;gap:5px">
         <div class="hint">巡邏＝遊走打怪撿東西。下列勾的都做到，才切換原地掛機：</div>
-        ${CHK('gate.deity', '拿到🎯神祇', '在寶箱分頁選')}
-        <div data-show="gate.deity" style="display:grid;gap:4px;padding-left:18px">
-          <div class="hint">獵神中：全力開寶箱、找精英怪。</div>
-          <label>開了 ${NUM('huntLeaveChests', 40)} 個寶箱</label>
-          <label>或打了 ${NUM('huntLeaveMin', 40)} 分鐘</label>
-          <label>或錢不夠開寶箱 ${NUM('huntPoorSec', 40, 0, 10)} 秒</label>
-          <div>還沒拿到就：</div>
-          ${RADIO('huntPhase.onFail', [['leave', '離開這場重來'], ['farm', '放棄神祇，照常掛機']])}
-          <div class="hint">數字填 0＝不看這個條件</div>
-        </div>
+        ${CHK('gate.deity', '拿到🎯神祇', '目標和放棄條件在「寶箱」頁')}
         ${CHK('gate.skillOn', '學到技能優先序')}
         <div data-show="gate.skillOn" style="display:grid;gap:4px;padding-left:18px">
           <label>前 ${NUM('gate.skillTop', 38, 1)} 個都升到 Lv ${NUM('gate.skillLv', 38, 1)} 以上</label>
@@ -1754,53 +1766,53 @@
   </div>
 
   <div class="pg" data-pg="skill">
-    <div class="scope">設定檔</div>
-    <div class="h">技能優先序</div>
-    ${LIST('priority', '一行一個，越上面越優先&#10;例：&#10;神聖之光&#10;治癒術', 96)}
-    <div class="h">不要的技能 <span class="hint">出現就放逐、絕不選</span></div>
-    ${LIST('skillBanish', '例：緩速術')}
-    <div class="h">核心技能 <span class="hint">出現就專注、之後更常出現</span></div>
-    ${LIST('skillFocus', '例：神聖之光')}
-    <div class="h">每場最多用幾次 <span class="hint">沒命中優先序時用來換卡，0＝不用</span></div>
-    ${PERKROW('skill')}
+    ${SEC('技能', `
+      ${LEGEND()}
+      ${ILIST('skill', '技能名稱，例：神聖之光')}
+      <div class="h">重抽次數 <span class="hint">每場最多；沒出現優先的技能時用來換卡，0＝不用</span></div>
+      ${PERKROW('skill')}`, true, '設定檔')}
     <div class="hint perkleft"></div>
   </div>
 
   <div class="pg" data-pg="chest">
-    <div class="scope">設定檔</div>
-    <div class="hint">開寶箱時先看神祇，再看其他卡。重抽次數是遊戲每場共用的，技能分頁也會用到</div>
+    <div class="hint">開寶箱時先看神祇，再看其他卡。重抽次數是遊戲每場共用的，技能頁也會用到</div>
     ${SEC('🎯 神祇', `
-      <div class="hint">🎯＝想要（最優先、出現就專注、沒出現就重抽神祇卡）　✕＝不要（出現就放逐、不選）</div>
-      <div style="display:grid;grid-template-columns:1fr auto;gap:2px 6px;align-items:center">
-        ${DEITY_NAMES.map((d) => `<span>${d}</span><span class="seg" data-d="${d}"><button data-v="">—</button><button data-v="want">🎯</button><button data-v="ban">✕</button></span>`).join('')}
-      </div>
-      <div class="h">其他想要的 <span class="hint">清單外，例：技能神祇</span></div>
-      ${LIST('deityExtra', '一行一個', 34)}
-      <div class="h">優先順序 <span class="hint">越上面越優先（同時出現時選上面的）</span></div>
-      <div id="rb-dorder" class="dorder"></div>
+      ${LEGEND('目標，越上面越先（出現就專注；沒出現就重抽神祇卡）', '', '放逐，絕不選')}
+      ${ILIST('deity', '清單外的神祇，例：神聖之光')}
       ${CHK('deitySwapUp', '已拿到後，出現更優先的也換上去', '換了原本的精煉 +N 會歸零')}
       ${CHK('deityRerollAll', '三張都沒有神祇時也「重抽全部」')}
-      <div class="h">每場最多用幾次</div>
+      <div class="h">重抽次數 <span class="hint">每場最多</span></div>
       ${PERKROW('deity')}
       ${CHK('perks.huntAll', '獵神時全部先給神祇', '拿到後才照各自的次數')}
-    `, true)}
+      <div class="h">找不到時 <span class="hint">玩法頁勾「拿到🎯神祇」才有作用；0＝不看這個條件</span></div>
+      <label>開了 ${NUM('huntLeaveChests', 40)} 個寶箱</label>
+      <label>或打了 ${NUM('huntLeaveMin', 40)} 分鐘</label>
+      <label>或錢不夠開寶箱 ${NUM('huntPoorSec', 40, 0, 10)} 秒</label>
+      <div>還沒拿到就：</div>
+      ${RADIO('huntPhase.onFail', [['leave', '離開這場重來'], ['farm', '放棄神祇，照常掛機']])}
+    `, true, '設定檔')}
     ${SEC('其他寶箱卡', `
-      <div class="h">優先序 <span class="hint">比對卡片文字</span></div>
-      ${LIST('chestPriority', '一行一個，越上面越優先&#10;例：&#10;詠唱速度&#10;傳說', 70)}
-      <label>品質低於 ${SELECT('chestMinQ', QUALITY.map((q) => [q, q]))} 就重抽</label>
+      ${LEGEND()}
+      ${ILIST('chest', '比對卡片文字，例：詠唱速度、傳說')}
+      <label>品質 ≥ ${SELECT('chestMinQ', QUALITY.map((q) => [q, q]))} 才選，不到就重抽</label>
       ${CHK('chestAvoidSwap', '盡量不換掉身上的裝備')}
-      <div class="h">不要的 <span class="hint">出現就放逐</span></div>
-      ${LIST('chestBanish', '例：藥水')}
-      <div class="h">想要的 <span class="hint">出現就專注</span></div>
-      ${LIST('chestFocus', '例：詠唱速度')}
-      <div class="h">每場最多用幾次</div>
+      <div class="h">重抽次數 <span class="hint">每場最多</span></div>
       ${PERKROW('chest')}
-    `, true)}
+    `, true, '設定檔')}
+    ${SEC('👥 組隊擲骰', `
+      <label>${SELECT('roll.mode', [['off', '自己按'], ['pass', '全部放棄'], ['greed', '全部 Greed'], ['need', '全部 Need'], ['rule', '依規則']])}</label>
+      <div data-show="roll.mode=rule" style="display:grid;gap:4px">
+        <label>品質 ≥ ${SELECT('roll.needQ', QUALITY.map((q) => [q, q]))} 就 Need</label>
+        <label>卡片 ${SELECT('roll.card', [['rule', '照品質'], ['need', 'Need'], ['greed', 'Greed'], ['pass', '放棄']])}</label>
+        <label>其他 ${SELECT('roll.other', [['greed', 'Greed'], ['pass', '放棄'], ['need', 'Need']])}</label>
+        ${LEGEND('一定 Need', '', '一定放棄')}
+        ${ILIST('roll', '裝備名稱，例：Tidal Shoes')}
+      </div>
+    `, false, '設定檔')}
     <div class="hint perkleft"></div>
   </div>
 
   <div class="pg" data-pg="sys">
-    <div class="scope">共用（角色名稱除外）</div>
     ${SEC('帳號與自動登入', `
       ${CHK('autoLogin', '重新整理後自動回到遊戲', '登入→選角色→大廳')}
       <div data-show="autoLogin" style="display:grid;gap:4px">
@@ -1809,29 +1821,18 @@
         <label>帳號 <input id="rb-cu" type="text" autocomplete="off" spellcheck="false" style="flex:1;min-width:0"></label>
         <label>密碼 <input id="rb-cp" type="password" autocomplete="new-password" style="flex:1;min-width:0"></label>
         <div><button class="btn" id="rb-csave" type="button">儲存帳號密碼</button> <button class="btn" id="rb-cclr" type="button">清除</button> <span class="hint" id="rb-cst"></span></div>
-        <div class="hint">被登出時自動登入。存在擴充功能裡，遊戲網頁讀不到；密碼以明碼存在這台電腦的 Chrome 設定檔。登入失敗會停下，10 分鐘內不重試</div>
-      </div>`, true)}
+        <div class="hint">被登出時自動登入。存在擴充功能裡，遊戲網頁讀不到；密碼以明碼存在這台電腦的 Chrome 設定檔。登入失敗會停下，重試會越等越久</div>
+      </div>`, true, '共用')}
     ${SEC('長時間掛機', `
       ${CHK('noDiscard', '分頁不被 Chrome 釋放')}
       ${CHK('keepAwake', '掛機時電腦保持清醒', '螢幕不關、不自動鎖定')}
       ${CHK('autoRestore', '被最小化時自動還原視窗')}
       <button class="btn" id="rb-popout" type="button">把遊戲移到獨立視窗</button>
-      <div class="hint">遊戲分頁被切走、最小化、被完全蓋住時遊戲會停住；請讓它單獨一個視窗並露出來</div>`, true)}
+      <div class="hint">遊戲分頁被切走、最小化、被完全蓋住時遊戲會停住；請讓它單獨一個視窗並露出來</div>`, true, '共用')}
   </div>
 
   <div class="pg" data-pg="log">
     <div id="rb-log" style="display:grid;gap:5px"></div>
-    ${SEC('👥 組隊擲骰', `
-      <div class="hint">跟著設定檔</div>
-      <label>${SELECT('roll.mode', [['off', '自己按'], ['pass', '全部放棄'], ['greed', '全部 Greed'], ['need', '全部 Need'], ['rule', '依規則']])}</label>
-      <div data-show="roll.mode=rule" style="display:grid;gap:4px">
-        <label>品質 ≥ ${SELECT('roll.needQ', QUALITY.map((q) => [q, q]))} 就 Need</label>
-        <label>卡片 ${SELECT('roll.card', [['rule', '照品質'], ['need', 'Need'], ['greed', 'Greed'], ['pass', '放棄']])}</label>
-        <label>其他 ${SELECT('roll.other', [['greed', 'Greed'], ['pass', '放棄'], ['need', 'Need']])}</label>
-        <div class="hint">一定 Need（名稱）</div>${LIST('roll.needList', '例：Tidal Shoes', 34)}
-        <div class="hint">一定放棄（名稱）</div>${LIST('roll.passList', '例：皮帽', 34)}
-      </div>
-    `)}
     <div style="display:flex;gap:6px"><button class="btn" id="rb-lexp" type="button" style="flex:1">匯出場次</button><button class="btn" id="rb-dexp" type="button" style="flex:1">匯出掉落</button><button class="btn" id="rb-lclr" type="button">清除</button></div>
     <div class="hint">每場結束自動記錄（存在這個瀏覽器）。滑鼠移到「放棄」看原因</div>
   </div>
@@ -1860,10 +1861,8 @@
       else { cfg.gate.on = false; cfg.mode = v; }
       BOT.anchor = null; save(); render(true);
     };
-    panel.querySelector('#rb-dorder').onclick = onDeityOrder;
-    panel.querySelectorAll('.seg[data-d]').forEach((sg) => sg.querySelectorAll('button').forEach((b) => {
-      b.onclick = () => { const v = b.dataset.v; if (v) cfg.deity[sg.dataset.d] = v; else delete cfg.deity[sg.dataset.d]; save(); render(); };
-    }));
+    panel.addEventListener('click', onListClick);
+    panel.querySelectorAll('.il-add input').forEach((inp) => { inp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); ilAdd(inp.closest('.il')); } }; });
     // 摺疊區塊記住開合（每個瀏覽器）
     panel.querySelectorAll('details.dt').forEach((d) => {
       try { if (localStorage.getItem('roBot.dt.' + d.dataset.dt) === '1') d.open = true; } catch {}
@@ -1946,27 +1945,86 @@
     } catch (e) { st.textContent = '重新載入失敗：' + e.message; }
   }
 
-  function renderDeityOrder() {
-    const box = panel?.querySelector('#rb-dorder');
-    if (!box) return;
-    const w = deityWant(), sig = w.join('|');
-    if (box.dataset.sig === sig) return;
-    box.dataset.sig = sig;
-    box.innerHTML = w.length ? w.map((d, i) => `<div class="dor"><b>${i + 1}</b><span>${d.replace(/</g, "&lt;")}</span>
-      <button type="button" data-mv="${i}:-1"${i ? '' : ' disabled'}>▲</button><button type="button" data-mv="${i}:1"${i < w.length - 1 ? '' : ' disabled'}>▼</button></div>`).join('')
-      : '<div class="hint">還沒有想要的神祇（上面按 🎯，或在「其他想要的」填）</div>';
+  // ── v0.9.0 統一清單：技能、神祇、其他寶箱卡、組隊擲骰都用同一種表格
+  // 每列：名稱｜🎯 優先（越上面越先）｜★ 專注｜✕ 放逐｜▲▼｜🗑；最下面「＋ 新增」。資料仍存在原本的設定（陣列），不用另外轉換
+  const ILEG = { want: '🎯', focus: '★', ban: '✕' };
+  function arrList(w, f, b, opt = {}) {
+    const get = (k) => (k ? lines(getP(k)) : []), put = (k, v) => k && setP(k, v);
+    return {
+      focus: !!f, order: opt.order !== false,
+      rows() {
+        const W = get(w), F = get(f), B = get(b);
+        return [...new Set([...W, ...F, ...B])].map((n) => ({ n, want: W.indexOf(n), focus: F.includes(n), ban: B.includes(n), del: true }));
+      },
+      toggle(n, st) {
+        const W = get(w), F = get(f), B = get(b), has = { want: W, focus: F, ban: B }[st].includes(n);
+        if (st === 'want') put(w, has ? W.filter((x) => x !== n) : [...W, n]);
+        if (st === 'focus') put(f, has ? F.filter((x) => x !== n) : [...F, n]);
+        if (st === 'ban') put(b, has ? B.filter((x) => x !== n) : [...B, n]);
+        if (!has && st === 'ban') { put(w, W.filter((x) => x !== n)); put(f, F.filter((x) => x !== n)); } // 放逐就不會又優先／專注
+        if (!has && st !== 'ban') put(b, B.filter((x) => x !== n));
+      },
+      move(n, d) { const W = get(w), i = W.indexOf(n), j = i + d; if (i < 0 || j < 0 || j >= W.length) return; [W[i], W[j]] = [W[j], W[i]]; put(w, W); },
+      add(n) { if (!this.rows().some((r) => r.n === n)) put(w, [...get(w), n]); },
+      del(n) { for (const k of [w, f, b]) put(k, get(k).filter((x) => x !== n)); },
+    };
   }
-  function onDeityOrder(ev) {
-    const b = ev.target.closest?.('[data-mv]');
-    if (!b || b.disabled) return;
-    const [i, d] = b.dataset.mv.split(':').map(Number), w = deityWant(), j = i + d;
-    if (j < 0 || j >= w.length) return;
-    [w[i], w[j]] = [w[j], w[i]];
-    cfg.deityOrder = w; save(); renderDeityOrder();
+  const IL = {
+    skill: arrList('priority', 'skillFocus', 'skillBanish'),
+    chest: arrList('chestPriority', 'chestFocus', 'chestBanish'),
+    roll: arrList('roll.needList', null, 'roll.passList', { order: false }),
+    deity: {
+      focus: false, order: true,
+      rows() {
+        const W = deityWant(), ex = lines(cfg.deityExtra);
+        return [...new Set([...W, ...DEITIES, ...ex])].map((n) => ({ n, want: W.indexOf(n), focus: false, ban: cfg.deity[n] === 'ban', del: ex.includes(n) && !DEITIES.includes(n) }));
+      },
+      toggle(n, st) { cfg.deity[n] = cfg.deity[n] === st ? 'none' : st; },
+      move(n, d) { const W = deityWant(), i = W.indexOf(n), j = i + d; if (i < 0 || j < 0 || j >= W.length) return; [W[i], W[j]] = [W[j], W[i]]; cfg.deityOrder = W; },
+      add(n) { if (!DEITIES.includes(n) && !lines(cfg.deityExtra).includes(n)) cfg.deityExtra = [...lines(cfg.deityExtra), n]; cfg.deity[n] = 'want'; },
+      del(n) { cfg.deityExtra = lines(cfg.deityExtra).filter((x) => x !== n); delete cfg.deity[n]; cfg.deityOrder = (cfg.deityOrder || []).filter((x) => x !== n); },
+    },
+  };
+  const ilRows = (k) => { const a = IL[k].rows(); return [...a.filter((r) => r.want >= 0).sort((x, y) => x.want - y.want), ...a.filter((r) => r.want < 0)]; };
+  const htmlEsc = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+  function renderLists() {
+    panel?.querySelectorAll('.il[data-il]').forEach((box) => {
+      const k = box.dataset.il, L = IL[k], rows = ilRows(k), sig = JSON.stringify(rows);
+      const list = box.querySelector('.il-rows');
+      if (list.dataset.sig === sig) return;
+      list.dataset.sig = sig;
+      const nW = rows.filter((r) => r.want >= 0).length;
+      list.innerHTML = rows.map((r, i) => `<div class="ir${r.want >= 0 ? ' w' : ''}${r.ban ? ' b' : ''}" data-i="${i}">
+        <b class="no">${r.want >= 0 && L.order ? r.want + 1 : ''}</b><span class="nm">${htmlEsc(r.n)}</span>
+        <span class="s3"><button type="button" data-s="want" class="${r.want >= 0 ? 'on' : ''}" title="優先">🎯</button>${L.focus ? `<button type="button" data-s="focus" class="${r.focus ? 'on' : ''}" title="專注">★</button>` : ''}<button type="button" data-s="ban" class="${r.ban ? 'on' : ''}" title="放逐">✕</button></span>
+        ${L.order ? `<span class="mv"><button type="button" data-mv="-1"${r.want > 0 ? '' : ' disabled'}>▲</button><button type="button" data-mv="1"${r.want >= 0 && r.want < nW - 1 ? '' : ' disabled'}>▼</button></span>` : ''}
+        ${r.del ? '<button type="button" class="del" data-del title="移除">🗑</button>' : '<span class="del"></span>'}</div>`).join('')
+        || '<div class="hint">還沒有項目，從下面新增</div>';
+    });
   }
+  function onListClick(ev) {
+    const box = ev.target.closest?.('.il[data-il]'); if (!box) return;
+    const k = box.dataset.il, L = IL[k];
+    if (ev.target.closest('.il-add button')) return ilAdd(box);
+    const row = ev.target.closest('.ir'); if (!row) return;
+    const r = ilRows(k)[+row.dataset.i]; if (!r) return;
+    const b = ev.target.closest('button'); if (!b || b.disabled) return;
+    if (b.dataset.s) L.toggle(r.n, b.dataset.s);
+    else if (b.dataset.mv) L.move(r.n, +b.dataset.mv);
+    else if (b.hasAttribute('data-del')) L.del(r.n);
+    else return;
+    save(); renderLists(); render();
+  }
+  function ilAdd(box) {
+    const inp = box.querySelector('.il-add input'), n = inp.value.trim();
+    if (!n) return;
+    IL[box.dataset.il].add(n); inp.value = '';
+    save(); renderLists(); render();
+  }
+  const ILIST = (k, ph) => `<div class="il" data-il="${k}"><div class="il-rows"></div><div class="il-add"><input type="text" placeholder="${ph}"><button type="button">＋ 新增</button></div></div>`;
   function render(full) {
     if (!panel) return;
-    renderDeityOrder();
+    renderLists();
     const g = (id) => panel.querySelector('#' + id);
     const act = document.activeElement;
     g('rb-ver').textContent = 'v' + BOT.version;
@@ -1991,7 +2049,6 @@
     panel.querySelectorAll('[data-show]').forEach((el) => { el.style.display = showOk(el.dataset.show) ? '' : 'none'; });
     if (g('rb-flow') !== act) g('rb-flow').value = cfg.gate.on ? 'gate' : cfg.mode;
     DIFF.forEach((_, i) => { g('rb-dv' + i).textContent = Math.round(cfg.diff[i] * 100) + '%'; });
-    panel.querySelectorAll('.seg[data-d]').forEach((sg) => sg.querySelectorAll('button').forEach((b) => b.classList.toggle('on', (cfg.deity[sg.dataset.d] || '') === b.dataset.v)));
     { const l = gateSkills(); g('rb-gskl').textContent = l.length ? `＝${l.join('、')}` : '技能分頁還沒有優先序'; }
 
     const r = inRun(), P = r?.player, pk = r?.perksLeft;

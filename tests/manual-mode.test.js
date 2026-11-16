@@ -18,7 +18,7 @@ const { chromium } = require('playwright');
 
   ok((await cfg()).tab === 'skill', '舊的「重抽」分頁轉到技能');
   ok(await p.evaluate(() => [...document.querySelectorAll('nav button')].map(b => b.textContent).join(',')) === '玩法,關卡,技能,寶箱,紀錄,⚙', '分頁：玩法 關卡 技能 寶箱 紀錄 ⚙');
-  ok(await p.evaluate(() => !!document.querySelector('.pg[data-pg=skill] input[data-k="perks.skill.reroll_card"]') && !!document.querySelector('.pg[data-pg=chest] input[data-k="perks.deity.banish"]') && !!document.querySelector('.pg[data-pg=log] select[data-k="roll.mode"]') && !!document.querySelector('.pg[data-pg=sys] #rb-cu')), '重抽次數拆進技能／寶箱；擲骰在紀錄；帳號在 ⚙');
+  ok(await p.evaluate(() => !!document.querySelector('.pg[data-pg=skill] input[data-k="perks.skill.reroll_card"]') && !!document.querySelector('.pg[data-pg=chest] input[data-k="perks.deity.banish"]') && !!document.querySelector('.pg[data-pg=chest] select[data-k="roll.mode"]') && !!document.querySelector('.pg[data-pg=sys] #rb-cu')), '重抽次數在技能／寶箱；擲骰在寶箱（v0.9.0）；帳號在 ⚙');
   ok(await p.evaluate(() => getComputedStyle(document.querySelector('[data-show="@idle"]')).display === 'none' && getComputedStyle(document.querySelector('[data-show="@roam"]')).display !== 'none'), '一直遊走時只顯示遊走細節');
   ok(await move() > 0, '自動時會移動');
 
