@@ -6,7 +6,7 @@
   if (window.__roBot?.destroy) { try { window.__roBot.destroy(); } catch {} }
   const H = window.__roHook || (window.__roHook = { run: null, lobby: null, runs: 0, runSeq: 0, drops: 0, stuck: 0 });
   const BOT = (window.__roBot = {
-    version: '0.9.7',
+    version: '0.9.8',
     get run() { return H.run; },
     get lobby() { return H.lobby; },
     get runs() { return H.runs; }, set runs(v) { H.runs = v; },
@@ -100,6 +100,7 @@
     skillOkTop: 0,         // 命中優先序前 N 名才算滿意（0 = 命中任何一個）
     skillBanish: [],
     skillFocus: [],
+    festRareOnly: false,   // v0.9.8 燈籠節：只打有隱藏王（Evil Snake Lord）的場次，沒有就開場離開重進
     skillUpg: [],          // v0.9.7 技能升級項目順序（升級卡強化行的關鍵字，例：目標、冷卻、傷害）
     // 組隊掉落擲骰：off 自己按 / pass 全部放棄 / greed 全部 Greed / need 全部 Need / rule 依規則
     roll: { mode: 'off', needList: [], passList: [], needQ: '傳說', card: 'rule', other: 'greed' },
@@ -993,6 +994,7 @@
       drops: (rs.drops || []).map((d) => `${d.q ? d.q + ' ' : ''}${d.name}`),
       items: (rs.drops || []).map(itemOf), lootNote: rs.lootNote || '',
       ...mysteryOf(run),
+      ...(run.stageId === 'louyang' ? { rare: run.rareId ? 1 : 0 } : {}), // v0.9.8 燈籠節隱藏王
       mode: phase() === 'normal' ? cfg.mode : 'hunt',
     };
     const a = loadLog(); a.push(e); saveLog(a);
@@ -1584,6 +1586,13 @@
           }
         } else { BOT.pausedAt = 0; BOT.resumeDelay = rnd(1000, 2000); }
 
+        // ②.48 v0.9.8 燈籠節只打有隱藏王的場次：有沒有隱藏王是伺服器開場決定的（run.rareId＝dark_snake_lord），
+        // 整場不會變 → 沒有就在開場幾秒（隨機 3～8 秒，不要一進場就秒退）後結束這場，回城重進
+        if (cfg.festRareOnly && on('loop') && st === 'playing' && !BOT.leaving && run.stageId === 'louyang' && !run.rareId) {
+          BOT.rs.rareWait ??= rnd(3, 8);
+          if ((run.time || 0) >= BOT.rs.rareWait) leaveRun('沒有隱藏王（Evil Snake Lord）');
+        }
+
         // ②.5 獵目標失敗 → 放棄這場
         if (on('pick') && st === 'playing' && !BOT.leaving) {
           const why = huntGiveUp(run);
@@ -1817,6 +1826,7 @@
     <div class="scope">關卡、難度跟著設定檔；其他共用</div>
     <label>關卡 <select data-k="stage">${STAGES.map((s) => `<option value="${s}">${s === FEST ? '燈籠節（季節活動）' : s}</option>`).join('')}</select></label>
     <div class="hint" data-show="stage=燈籠節">燈籠節從廣場的「節慶主持人」進入；沒有難度可調，打王掉扭蛋（不掉裝備）</div>
+    <div data-show="stage=燈籠節">${CHK('festRareOnly', '只打有隱藏王的場次', '隱藏王 Evil Snake Lord 是伺服器開場決定的；沒有就開場幾秒後離開重進（那場的扭蛋就沒了）')}</div>
     ${DIFF.map((d, i) => `<div class="r"><span>${d.name}</span><input type="range" data-k="diff.${i}" min="${d.min}" max="${d.max}" step="0.05"><span id="rb-dv${i}"></span></div>`).join('')}
     <label>打 ${NUM('maxRuns', 44)} 場後停止 <span class="hint">0＝不停</span></label>
     <label>結算後等 ${NUM('reenterDelay', 44, 0, 5)} 秒再進關</label>
@@ -2119,7 +2129,7 @@
     panel.classList.toggle('manual', !!cfg.manual);
     g('rb-manual').textContent = cfg.manual ? '✋ 手動' : '▶ 自動中';
     g('rb-st').textContent = (cfg.manual ? '✋ 手動模式：bot 不操作（按 F8 或標題列「✋ 手動」恢復）\n' : '') + (BOT.loginErr ? `⚠ ${BOT.loginErr}\n` : '') + (BOT.loginWarn ? `⚠ 自動登入找不到角色「${BOT.loginWarn}」，請手動選\n` : '') +
-      `${r ? '關卡中 · ' + r.state : visible($('#lobby-ui')) ? '城鎮' + (cfg.loop && H.nextEnterAt > Date.now() ? ` · ${Math.ceil((H.nextEnterAt - Date.now()) / 1000)} 秒後進關` : '') : '—'}` +
+      `${r ? '關卡中 · ' + r.state + (r.stageId === 'louyang' ? (r.rareId ? ' 🐍隱藏王' : ' 無隱藏王') : '') : visible($('#lobby-ui')) ? '城鎮' + (cfg.loop && H.nextEnterAt > Date.now() ? ` · ${Math.ceil((H.nextEnterAt - Date.now()) / 1000)} 秒後進關` : '') : '—'}` +
       (r ? `  怪 ${BOT.dbg?.enemies ?? '-'}  威脅 ${BOT.dbg?.threat ?? '-'}\n` +
            `HP ${r.hp != null ? Math.round(r.hp) + '/' + Math.round(r.stats?.maxHp ?? 0) : '-'}  zeny ${r.zeny ?? '-'}  卡住 ${BOT.stuck || 0}\n` +
            (ph !== 'normal' ? `${ph === 'hunt' ? '🔎 巡邏中' : '🧘 掛機中'}` +
