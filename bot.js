@@ -6,7 +6,7 @@
   if (window.__roBot?.destroy) { try { window.__roBot.destroy(); } catch {} }
   const H = window.__roHook || (window.__roHook = { run: null, lobby: null, runs: 0, runSeq: 0, drops: 0, stuck: 0 });
   const BOT = (window.__roBot = {
-    version: '0.9.12',
+    version: '0.9.13',
     get run() { return H.run; },
     get lobby() { return H.lobby; },
     get runs() { return H.runs; }, set runs(v) { H.runs = v; },
@@ -66,6 +66,7 @@
     zenyMin: 50,           // zeny 掉落：單筆金額 ≥ 這個才特地走過去撿（小錢經過時會自動吸）
     mode: 'roam',          // roam 遊走 | idle 原地掛機
     idleKinds: { chest: true, loot: true, magnet: true, meat: false, zeny: false },
+    roamRadius: 0,         // v0.9.13 遊走範圍：以這場開場位置為中心，只在這個距離內遊走／撿東西（0＝不限）
     idleRadius: 1200,      // 原地模式：只撿離原點這個距離內的東西
     idleChestRange: 2500,  // 原地模式：寶箱可以走比較遠（錢夠才去）
     idleDodge: false,      // 原地模式：是否仍閃避怪物
@@ -378,6 +379,14 @@
   function markVisited(P) { VISIT.set(vkey(P.x, P.y), Date.now()); }
   // v0.8.9 獵神（開局）時：短程（300～800）、找「離怪群約 350」的位置繞，邊走邊打；
   // 以前一律 600～1600 而且偏好遠離怪群 → 開局 72% 時間在長途閒晃，60 秒只殺 50 多隻（原地掛機 5 秒就殺 140 隻）
+  // v0.9.13 遊走範圍：中心＝這場開場位置（BOT.rs.roamC）；R＝0 不限
+  const roamC = (P) => (BOT.rs.roamC ??= { x: P.x, y: P.y });
+  const inRoam = (P, x, y) => { const R = +cfg.roamRadius || 0; if (!R) return true; const c = roamC(P); return hyp(x - c.x, y - c.y) <= R; };
+  function clampRoam(P, x, y) {
+    const R = +cfg.roamRadius || 0; if (!R) return [x, y];
+    const c = roamC(P), d = hyp(x - c.x, y - c.y); if (d <= R * 0.9) return [x, y];
+    const k = (R * 0.9) / d; return [c.x + (x - c.x) * k, c.y + (y - c.y) * k];
+  }
   function newWanderTarget(run, P) {
     const b = run.bounds || { x0: P.x - 1600, x1: P.x + 1600, y0: P.y - 1600, y1: P.y + 1600 };
     const near = huntingDeity();
@@ -388,6 +397,7 @@
     for (let i = 0; i < 14; i++) {
       const a = Math.random() * Math.PI * 2, r = near ? rnd(300, 800) : rnd(600, 1600);
       let x = Math.min(b.x1, Math.max(b.x0, P.x + Math.cos(a) * r)), y = Math.min(b.y1, Math.max(b.y0, P.y + Math.sin(a) * r));
+      [x, y] = clampRoam(P, x, y);
       try {
         if (run.walk) {
           [x, y] = run.walk.nearestWalkable(x, y);
@@ -458,6 +468,7 @@
       if (o.kind === 'chest' && !canChest) continue;
       if (o.kind === 'zeny' && (o.value ?? 0) < effZenyMin()) continue;
       if (hyp(o.x - P.x, o.y - P.y) > 900) continue;
+      if (!inRoam(P, o.x, o.y)) continue; // v0.9.13 遊走範圍外的不去撿
       cand.push(o);
     }
     let best = null, bs = 0.5;
@@ -481,7 +492,7 @@
       steer.target = best; steer.targetAt = now;
       return best;
     }
-    if (hunt) { const el = eliteTarget(run, P); if (el) { steer.target = el; steer.targetAt = now; return el; } }
+    if (hunt) { const el = eliteTarget(run, P); if (el && inRoam(P, el.x, el.y)) { steer.target = el; steer.targetAt = now; return el; } }
     if (!cur || !cur.wander || now - steer.targetAt > 12000 || hyp(cur.x - P.x, cur.y - P.y) < 64) newWanderTarget(run, P);
     return steer.target;
   }
@@ -1672,6 +1683,31 @@
     } catch (e) { log('tick error', e); }
   }, 50));
   BOT.timers.push(setInterval(render, 500));
+
+  // v0.9.13 遊走範圍框：在遊戲畫面上畫出範圍（world3d.project 把地圖座標換成畫面座標，CSS 像素），只是疊一層 SVG，不碰遊戲
+  function drawRoam() {
+    let svg = document.getElementById('rb-roam');
+    const r = BOT.run, R = +cfg.roamRadius || 0, c = BOT.rs?.roamC;
+    const show = R && c && r?.world3d?.project && effMode() === 'roam' && r.state !== 'over' && !cfg.manual;
+    if (!show) { if (svg) svg.style.display = 'none'; return; }
+    if (!svg) {
+      svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.id = 'rb-roam';
+      svg.setAttribute('style', 'position:fixed;left:0;top:0;width:100vw;height:100vh;pointer-events:none;z-index:2147483646');
+      svg.innerHTML = '<polygon fill="rgba(91,141,239,.06)" stroke="rgba(91,141,239,.85)" stroke-width="2" stroke-dasharray="8 6"/><circle r="4" fill="rgba(91,141,239,.9)"/>';
+      document.body.appendChild(svg);
+    }
+    try {
+      const cv = r.app?.canvas || r.app?.view || document.querySelector('canvas'), o = cv ? cv.getBoundingClientRect() : { left: 0, top: 0 };
+      const pts = [];
+      for (let i = 0; i < 48; i++) { const a = (i / 48) * Math.PI * 2, q = r.world3d.project(c.x + Math.cos(a) * R, c.y + Math.sin(a) * R); pts.push(`${(o.left + q.x).toFixed(1)},${(o.top + q.y).toFixed(1)}`); }
+      const m = r.world3d.project(c.x, c.y);
+      svg.firstChild.setAttribute('points', pts.join(' '));
+      svg.lastChild.setAttribute('cx', o.left + m.x); svg.lastChild.setAttribute('cy', o.top + m.y);
+      svg.style.display = '';
+    } catch { svg.style.display = 'none'; }
+  }
+  BOT.timers.push(setInterval(drawRoam, 100));
+  BOT.cleanup.push(() => document.getElementById('rb-roam')?.remove());
   BOT.timers.push(setInterval(() => { try { careTick(); } catch {} }, 30000));
   setTimeout(() => { try { careTick(); } catch {} }, 1500);
 
@@ -1862,6 +1898,7 @@
       </div>
       <button class="btn" id="rb-anchor" type="button">把目前位置設為原點</button>`)}</div>
     <div data-show="@roam" style="display:grid">${SEC('遊走細節', `
+      <label>遊走範圍 ${NUM('roamRadius', 56, 0, 100)} <span class="hint">以這場開場位置為中心，只在這個距離內走動、撿東西；遊戲畫面上會畫藍色虛線框；0＝不限</span></label>
       <label>閃怪距離 ${NUM('dangerR', 50, 50, 10)}</label>
       ${CHK('lootChest', '錢夠就去開寶箱')}
       <label>zeny 單筆 ≥ ${NUM('zenyMin', 46, 0, 10)} 才特地去撿</label>`)}</div>
@@ -2255,6 +2292,7 @@
            (ph !== 'normal' ? `${ph === 'hunt' ? '🔎 巡邏中' : '🧘 掛機中'}` +
              (skillGoal() ? `  技能 ${skillsReached() ? '✓' : BOT.rs?.skillTimeout ? '逾時' : '…'}` : '') +
              (deityGoal() ? `  神祇 ${huntDone() ? '✓' : BOT.rs?.huntFailed ? '放棄' : '…'}（寶箱 ${r.chestsOpened ?? 0}）` : '') : `模式：${effMode() === 'idle' ? '原地掛機' : '遊走'}`) +
+           (effMode() === 'roam' && +cfg.roamRadius && BOT.rs?.roamC && P ? `  離中心 ${Math.round(hyp(P.x - BOT.rs.roamC.x, P.y - BOT.rs.roamC.y))}/${cfg.roamRadius}` : '') +
            (effMode() === 'idle' && BOT.anchor && P ? `  離原點 ${Math.round(hyp(P.x - BOT.anchor.x, P.y - BOT.anchor.y))}${BOT.sweep ? ' 掃圈' : ''}` : '') + '\n'
          : '\n') +
       `${r?.dropsBy ? `? 裝備 ${mysteryOf(r).myst?.[0] ?? 0}・卡 ${mysteryOf(r).myst?.[1] ?? 0}` : `掉落 ${BOT.drops || 0}`}  進關 ${BOT.runs}${cfg.maxRuns ? '/' + cfg.maxRuns : ''}  hook ${BOT.run ? '✓' : '✗'}${BOT.lobby ? '✓' : '✗'}`;
