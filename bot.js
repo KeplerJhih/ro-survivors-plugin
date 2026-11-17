@@ -6,7 +6,7 @@
   if (window.__roBot?.destroy) { try { window.__roBot.destroy(); } catch {} }
   const H = window.__roHook || (window.__roHook = { run: null, lobby: null, runs: 0, runSeq: 0, drops: 0, stuck: 0 });
   const BOT = (window.__roBot = {
-    version: '0.9.11',
+    version: '0.9.12',
     get run() { return H.run; },
     get lobby() { return H.lobby; },
     get runs() { return H.runs; }, set runs(v) { H.runs = v; },
@@ -1722,7 +1722,7 @@
     panel.style.top = (pos.top ?? 70) + 'px';
     if (pos.w) panel.style.width = pos.w + 'px'; // v0.7.5 面板可拖右下角調整大小，記住寬高
     if (pos.h) panel.style.height = pos.h + 'px';
-    const savePos = () => { try { const o = { left: panel.offsetLeft, top: panel.offsetTop }; if (!panel.classList.contains('min')) { o.w = panel.offsetWidth; o.h = panel.offsetHeight; } else { const old = JSON.parse(localStorage.getItem('roBot.pos') || '{}'); o.w = old.w; o.h = old.h; } localStorage.setItem('roBot.pos', JSON.stringify(o)); } catch {} };
+    const savePos = () => { try { const o = { left: panel.offsetLeft, top: panel.offsetTop }; const old = JSON.parse(localStorage.getItem('roBot.pos') || '{}'); if (!panel.classList.contains('min')) { o.w = panel.offsetWidth; o.h = panel.offsetHeight; o.mw = old.mw; } else { o.w = old.w; o.h = old.h; o.mw = panel.offsetWidth; } localStorage.setItem('roBot.pos', JSON.stringify(o)); } catch {} };
     panel.innerHTML = `
 <style>
 #robot-panel{position:fixed;z-index:2147483647;box-sizing:border-box;width:240px;min-width:240px;min-height:140px;max-width:calc(100vw - 8px);max-height:calc(100vh - 16px);resize:both;overflow:hidden;display:flex;flex-direction:column;font:12px/1.4 system-ui,sans-serif;color:#1d2a44;background:rgba(255,255,255,.97);border:1px solid #9fb3d9;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.25);user-select:none}
@@ -1796,7 +1796,7 @@
 #robot-panel .st{font-size:11px;color:#445;white-space:pre-line;background:#eef2fa;padding:5px 8px;border-top:1px solid #d5def0;border-radius:0 0 7px 7px}
 #robot-panel .btn{all:unset;cursor:pointer;text-align:center;padding:3px 6px;border:1px solid #9fb3d9;border-radius:4px;background:#fff}
 #robot-panel.min .pf,#robot-panel.min nav,#robot-panel.min .body{display:none}
-#robot-panel.min{height:auto!important;min-height:0;resize:none}
+#robot-panel.min{height:auto!important;min-height:0;resize:horizontal}
 #robot-panel details.dt{border:1px solid #d5def0;border-radius:5px}
 #robot-panel details.dt summary{cursor:pointer;padding:4px 6px;font-weight:600;color:#2b3f66;background:#f3f6fc;border-radius:5px}
 #robot-panel details.dt .dtb{display:grid;gap:5px;padding:6px}
@@ -2012,7 +2012,15 @@
     g('rb-manual').onclick = () => setManual(!cfg.manual);
     g('rb-popout').onclick = () => extMsg({ type: 'popout' }, (r) => { panel.querySelector('#rb-st').textContent = r?.ok ? (r.alone ? '已經是獨立視窗了' : '已移到獨立視窗') : '失敗：' + (r?.error || '請先重新載入擴充功能'); });
     g('rb-anchor').onclick = () => { const P = BOT.run?.player; if (P) BOT.anchor = { x: P.x, y: P.y }; render(); };
-    g('rb-min').onclick = () => panel.classList.toggle('min');
+    // v0.9.12 縮小時右下角也能左右拉寬窄（寬度另外記 mw）；展開回到原本的寬高
+    g('rb-min').onclick = () => {
+      let p = {}; try { p = JSON.parse(localStorage.getItem('roBot.pos') || '{}'); } catch {}
+      const toMin = !panel.classList.contains('min');
+      if (toMin) savePos();
+      panel.classList.toggle('min', toMin);
+      const w = toMin ? p.mw : p.w; if (w) panel.style.width = w + 'px';
+      if (!toMin && p.h) panel.style.height = p.h + 'px';
+    };
     g('rb-reload').onclick = hotReload;
     g('rb-prof').onchange = (e) => switchProfile(e.target.value);
     g('rb-pnew').onclick = () => { const n = prompt('新設定檔名稱（例：弓箭手、騎士-刷洞穴）'); if (n && !newProfile(n)) alert('名稱重複或空白'); };
