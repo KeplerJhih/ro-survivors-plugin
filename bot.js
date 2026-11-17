@@ -6,7 +6,7 @@
   if (window.__roBot?.destroy) { try { window.__roBot.destroy(); } catch {} }
   const H = window.__roHook || (window.__roHook = { run: null, lobby: null, runs: 0, runSeq: 0, drops: 0, stuck: 0 });
   const BOT = (window.__roBot = {
-    version: '0.9.10',
+    version: '0.9.11',
     get run() { return H.run; },
     get lobby() { return H.lobby; },
     get runs() { return H.runs; }, set runs(v) { H.runs = v; },
@@ -778,6 +778,15 @@
     });
   }
 
+  // v0.9.11 強化項目每個技能不一樣（+1 目標、+3 脈衝、+9 冷卻縮減…）→ 自由輸入、包含就算（模糊）；
+  // 多個條目都命中時取最長的（「攻擊範圍」比「範圍」具體），排名用那個條目的位置
+  const UPG_HINT = ['目標', '冷卻', '傷害', '數量', '範圍', '攻擊範圍', '貫穿機率', '速度', '持續時間', '效果'];
+  const upgRank = (U, up) => { let best = -1; U.forEach((x, i) => { if (up.includes(x) && (best < 0 || x.length > U[best].length)) best = i; }); return best; };
+  const UPG_SEEN = 'roBot.upgSeen';
+  function learnUpg(up) { // 看過的強化文字（去掉數字、+、%）→ 面板輸入建議
+    const k = up.replace(/[+\-−]?\d+(\.\d+)?%?/g, '').replace(/\s+/g, ' ').trim(); if (!k || k.length > 20) return;
+    try { const a = JSON.parse(localStorage.getItem(UPG_SEEN) || '[]'); if (!a.includes(k)) { a.push(k); localStorage.setItem(UPG_SEEN, JSON.stringify(a.slice(-60))); } } catch {}
+  }
   function skillTick(run, cards) {
     // 順便學技能名稱 → id：卡片名稱有括號英文（神聖之光 (Holy Light)）就直接轉成 holy_light
     let learned = false;
@@ -814,7 +823,8 @@
         // v0.9.7 升級項目順序（例：目標 > 冷卻 > 傷害）：優先清單裡的技能先比強化項目，同項目再比技能順序；
         // 優先技能的「新！」卡排最前（先學到），沒列到的項目排在列到的後面
         const U = lines(cfg.skillUpg);
-        const r = !U.length || p < 0 ? 0 : up == null ? 0 : (U.findIndex((x) => up.includes(x)) + 1 || U.length + 1);
+        if (up) learnUpg(up);
+        const r = !U.length || p < 0 ? 0 : up == null ? 0 : (upgRank(U, up) + 1 || U.length + 1);
         const sc = (p >= 0 ? (100 - r) * 10000 + (100 - p) * 100 : (t.includes('新！') ? 0 : 1)) - (banned ? 1e8 : 0);
         return { sc, ok: !banned && (ok || !pri.length) };
       },
@@ -1743,6 +1753,11 @@
 #robot-panel .ir .mv button[disabled]{opacity:.15;cursor:default}
 #robot-panel .ir .del{opacity:.5;width:22px;padding:0;text-align:center;box-sizing:border-box;flex:none}
 #robot-panel .il-add{display:flex;gap:4px}
+#robot-panel #rb-upg .ir[draggable=true]{cursor:grab}
+#robot-panel #rb-upg .grip{width:10px;color:#8aa3cf}
+#robot-panel #rb-upg .ir.drag{opacity:.4}
+#robot-panel #rb-upg .ir.over{border-color:#5b8def;box-shadow:inset 0 2px 0 #5b8def}
+
 #robot-panel .il-add input{flex:1;min-width:0}
 #robot-panel .il-add button{all:unset;cursor:pointer;padding:0 6px;border:1px solid #9fb3d9;border-radius:4px;background:#fff;font-size:12px}
 #robot-panel details.dt>summary .scope{float:right;margin-left:6px}
@@ -1873,8 +1888,10 @@
     ${SEC('技能', `
       ${LEGEND()}
       ${ILIST('skill', '技能名稱，例：神聖之光')}
-      <div class="h">升級項目順序 <span class="hint">同時出現上面清單裡的技能升級時，先比強化項目（例：目標 → 冷卻 → 傷害），同項目再照技能順序；沒學過的優先技能永遠最先。空白＝只照技能順序</span></div>
-      ${ILIST('upg', '強化項目，例：目標、冷卻、傷害')}
+      <div class="h">升級項目順序 <span class="hint">同時出現上面清單裡的技能升級時，先比強化項目，同項目再照技能順序；沒學過的優先技能永遠最先。輸入卡片上的強化文字（模糊比對，例：目標、冷卻、脈衝），拖曳（或 ▲▼）排順序；空白＝只照技能順序</span></div>
+      <div class="il"><div id="rb-upg" class="il-rows"></div>
+        <div id="rb-upg-add" style="display:flex;gap:4px"><input type="text" list="rb-upg-dl" style="flex:1;min-width:0" placeholder="強化文字，例：目標、冷卻、脈衝"><button type="button">＋ 新增</button></div>
+        <datalist id="rb-upg-dl"></datalist></div>
       <div class="h">重抽次數 <span class="hint">每場最多；沒出現優先的技能時用來換卡，0＝不用</span></div>
       ${PERKROW('skill')}`, true, '設定檔')}
     <div class="hint perkleft"></div>
@@ -1969,6 +1986,9 @@
     };
     panel.addEventListener('click', onListClick);
     panel.addEventListener('change', onFBoss);
+    panel.addEventListener('click', onUpgClick);
+    panel.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && ev.target.closest?.('#rb-upg-add')) { ev.preventDefault(); upgAdd(); } });
+    for (const t of ['dragstart', 'dragover', 'drop', 'dragend']) panel.addEventListener(t, onUpgDrag);
     panel.querySelectorAll('.il-add input').forEach((inp) => { inp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); ilAdd(inp.closest('.il')); } }; });
     // 摺疊區塊記住開合（每個瀏覽器）
     panel.querySelectorAll('details.dt').forEach((d) => {
@@ -2080,7 +2100,6 @@
     skill: arrList('priority', 'skillFocus', 'skillBanish'),
     chest: arrList('chestPriority', 'chestFocus', 'chestBanish'),
     roll: arrList('roll.needList', null, 'roll.passList', { order: false }),
-    upg: arrList('skillUpg', null, null, { ban: false }),
     deity: {
       focus: false, order: true,
       rows() {
@@ -2143,6 +2162,42 @@
       + opt.map(([id, h]) => `<label><input type="checkbox" data-fb="${htmlEsc(id)}"${want.includes(id) ? ' checked' : ''}>${htmlEsc(bossName(id))} <span class="hint">${h}</span></label>`).join('');
   }
   const fbDisplay = (e) => (cfg.finalBoss?.[cfg.stage] ? lines(cfg.finalBoss[cfg.stage]) : e ? [e.mvp, e.rare].filter(Boolean) : []);
+  // v0.9.11 升級項目：自由輸入（cfg.skillUpg，依序），拖曳／▲▼ 排序、🗑 刪除；輸入建議＝常見 10 種＋看過的強化文字
+  function renderUpg() {
+    const box = panel?.querySelector('#rb-upg'); if (!box) return;
+    const U = lines(cfg.skillUpg); let seen = []; try { seen = JSON.parse(localStorage.getItem(UPG_SEEN) || '[]'); } catch {}
+    const sig = JSON.stringify([U, seen]); if (box.dataset.sig === sig) return; box.dataset.sig = sig;
+    box.innerHTML = U.map((n, i) => `<div class="ir w" draggable="true" data-upg="${htmlEsc(n)}">
+      <span class="grip" title="拖曳排序">⠿</span><b class="no">${i + 1}</b><span class="nm">${htmlEsc(n)}</span>
+      <span class="mv"><button type="button" data-umv="-1"${i > 0 ? '' : ' disabled'}>▲</button><button type="button" data-umv="1"${i < U.length - 1 ? '' : ' disabled'}>▼</button></span>
+      <button type="button" class="del" data-udel title="移除">🗑</button></div>`).join('') || '<div class="hint">還沒有項目，從下面新增（空白＝只照技能順序）</div>';
+    const dl = panel.querySelector('#rb-upg-dl');
+    if (dl) dl.innerHTML = [...new Set([...UPG_HINT, ...seen])].filter((x) => !U.includes(x)).map((x) => `<option value="${htmlEsc(x)}">`).join('');
+  }
+  const setUpg = (a) => { cfg.skillUpg = a; save(); renderUpg(); render(); };
+  function upgAdd() {
+    const inp = panel.querySelector('#rb-upg-add input'), n = inp.value.trim(); if (!n) return;
+    const U = lines(cfg.skillUpg); inp.value = ''; if (!U.includes(n)) setUpg([...U, n]);
+  }
+  function onUpgClick(ev) {
+    if (ev.target.closest?.('#rb-upg-add button')) return upgAdd();
+    const row = ev.target.closest?.('#rb-upg [data-upg]'); if (!row) return;
+    const n = row.dataset.upg, U = lines(cfg.skillUpg);
+    if (ev.target.closest('[data-udel]')) return setUpg(U.filter((x) => x !== n));
+    const b = ev.target.closest('[data-umv]'); if (!b || b.disabled) return;
+    const i = U.indexOf(n), j = i + +b.dataset.umv; if (i < 0 || j < 0 || j >= U.length) return;
+    [U[i], U[j]] = [U[j], U[i]]; setUpg(U);
+  }
+  let upgDrag = null;
+  function onUpgDrag(ev) {
+    const row = ev.target.closest?.('#rb-upg [data-upg]');
+    if (ev.type === 'dragstart') { if (!row || row.getAttribute('draggable') !== 'true') return; upgDrag = row.dataset.upg; ev.dataTransfer.effectAllowed = 'move'; try { ev.dataTransfer.setData('text/plain', upgDrag); } catch {} row.classList.add('drag'); return; }
+    if (ev.type === 'dragend') { upgDrag = null; panel.querySelectorAll('#rb-upg .drag,#rb-upg .over').forEach((e) => e.classList.remove('drag', 'over')); return; }
+    if (!upgDrag || !row) return;
+    const U = lines(cfg.skillUpg), to = U.indexOf(row.dataset.upg);
+    if (ev.type === 'dragover') { if (to >= 0) { ev.preventDefault(); panel.querySelectorAll('#rb-upg .over').forEach((e) => e.classList.remove('over')); row.classList.add('over'); } return; }
+    if (ev.type === 'drop' && to >= 0) { ev.preventDefault(); const a = U.filter((x) => x !== upgDrag); a.splice(to, 0, upgDrag); upgDrag = null; setUpg(a); }
+  }
   function onFBoss(ev) {
     const id = ev.target?.dataset?.fb; if (id == null) return;
     const a = fbDisplay(loadSB()[cfg.stage]).filter((x) => x !== id);
@@ -2152,7 +2207,7 @@
   }
   function render(full) {
     if (!panel) return;
-    renderLists(); renderFBoss();
+    renderLists(); renderFBoss(); renderUpg();
     const g = (id) => panel.querySelector('#' + id);
     const act = document.activeElement;
     g('rb-ver').textContent = 'v' + BOT.version;

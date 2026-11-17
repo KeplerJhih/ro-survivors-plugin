@@ -36,17 +36,28 @@ async function open(b, prof, cards) {
   ok(c === '火箭術', '沒列到的項目排在列到的後面 ' + c);
   [c] = await pick({ ...MAGE, skillUpg: [] }, up(0, '雷擊術', 3, '+1 目標') + up(1, '冰箭術', 5, '+20% 傷害'));
   ok(c === '冰箭術', '升級項目空白＝照技能順序（照舊） ' + c);
+  [c] = await pick({ ...MAGE, skillUpg: ['範圍', '攻擊範圍'] }, up(0, '冰箭術', 5, '+10% 攻擊範圍') + up(1, '火箭術', 4, '+10% 範圍'));
+  ok(c === '火箭術', '兩個條目都命中時取最長的：攻擊範圍算第 2、範圍算第 1 ' + c);
+  [c] = await pick({ ...MAGE, skillUpg: ['脈衝', '傷害'] }, up(0, '冰箭術', 5, '+20% 傷害') + up(1, '雷擊術', 3, '+3 脈衝'));
+  ok(c === '雷擊術', '自由輸入「脈衝」模糊命中「+3 脈衝」 ' + c);
+  [c] = await pick({ ...MAGE, skillUpg: ['冷卻'] }, up(0, '冰箭術', 5, '+20% 傷害') + up(1, '火箭術', 4, '+9 冷卻縮減'));
+  ok(c === '火箭術', '「冷卻」命中「冷卻縮減」 ' + c);
 
-  // 面板：技能區塊有「升級項目順序」清單，可新增／排序，沒有專注、放逐鈕
+  // v0.9.11 面板：自由輸入（模糊比對）、拖曳／▲▼ 排序、🗑 刪除；輸入建議含常見項目
   const { p, errs } = await open(b, { priority: ['冰箭術'] }, null);
-  const add = async (n) => p.evaluate((n) => { const box = document.querySelector('.il[data-il=upg]'); box.querySelector('input').value = n; box.querySelector('.il-add button').click(); }, n);
-  for (const n of ['傷害', '目標', '冷卻']) { await add(n); await p.waitForTimeout(200); }
-  await p.evaluate(() => [...document.querySelectorAll('.il[data-il=upg] .ir')].find((r) => r.querySelector('.nm').textContent === '傷害').querySelector('[data-mv="1"]').click()); await p.waitForTimeout(200);
-  await p.evaluate(() => [...document.querySelectorAll('.il[data-il=upg] .ir')].find((r) => r.querySelector('.nm').textContent === '傷害').querySelector('[data-mv="1"]').click()); await p.waitForTimeout(300);
-  const saved = await p.evaluate(() => JSON.parse(localStorage.getItem('roBot.cfg')).profiles.A.skillUpg);
-  ok(JSON.stringify(saved) === '["目標","冷卻","傷害"]', '新增＋▼ 排序存進設定檔 ' + JSON.stringify(saved));
-  ok(await p.evaluate(() => !document.querySelector('.il[data-il=upg] [data-s=ban]') && !document.querySelector('.il[data-il=upg] [data-s=focus]') && !!document.querySelector('.il[data-il=skill] [data-s=ban]')), '升級項目清單沒有專注／放逐；技能清單照舊有');
-  await p.screenshot({ path: require('path').join(require('os').tmpdir(), 'skill-upg.png'), clip: await p.evaluate(() => { const r = document.querySelector('.il[data-il=upg]').closest('.sec, details, section, div').getBoundingClientRect(); return { x: Math.max(0, r.x - 10), y: Math.max(0, r.y - 260), width: Math.min(520, r.width + 20), height: r.height + 280 }; }) }).catch(() => {});
+  const rows = () => p.evaluate(() => [...document.querySelectorAll('#rb-upg [data-upg]')].map((r) => r.dataset.upg));
+  const add = async (n, enter) => { await p.fill('#rb-upg-add input', n); if (enter) await p.press('#rb-upg-add input', 'Enter'); else await p.click('#rb-upg-add button'); await p.waitForTimeout(150); };
+  ok(await p.evaluate(() => [...document.querySelectorAll('#rb-upg-dl option')].some((o) => o.value === '目標')), '輸入建議有常見項目');
+  await add('傷害'); await add('目標', true); await add('脈衝');
+  const saved = () => p.evaluate(() => JSON.parse(localStorage.getItem('roBot.cfg')).profiles.A.skillUpg);
+  ok(JSON.stringify(await saved()) === '["傷害","目標","脈衝"]', '新增（按鈕／Enter）依序存 ' + JSON.stringify(await saved()));
+  await p.locator('#rb-upg [data-upg="脈衝"]').dragTo(p.locator('#rb-upg [data-upg="傷害"]')); await p.waitForTimeout(300);
+  ok(JSON.stringify(await saved()) === '["脈衝","傷害","目標"]', '拖曳：脈衝拖到最上面 ' + JSON.stringify(await saved()));
+  await p.evaluate(() => document.querySelector('#rb-upg [data-upg="目標"] [data-umv="-1"]').click()); await p.waitForTimeout(200);
+  ok(JSON.stringify(await saved()) === '["脈衝","目標","傷害"]', '▲ 也能排 ' + JSON.stringify(await saved()));
+  await p.evaluate(() => document.querySelector('#rb-upg [data-upg="傷害"] [data-udel]').click()); await p.waitForTimeout(200);
+  ok(JSON.stringify(await rows()) === '["脈衝","目標"]', '🗑 刪除');
+  await p.screenshot({ path: process.env.UPG_SHOT || require('path').join(require('os').tmpdir(), 'skill-upg.png'), clip: await p.evaluate(() => { const r = document.querySelector('#rb-upg').getBoundingClientRect(); return { x: Math.max(0, r.x - 12), y: Math.max(0, r.y - 60), width: r.width + 24, height: r.height + 72 }; }) }).catch(() => {});
   ok(!errs.length, 'no page errors ' + errs.join(';')); await p.close();
   console.log(fail ? `FAILED ${fail}` : 'ALL PASS');
   await b.close();
