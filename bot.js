@@ -6,7 +6,7 @@
   if (window.__roBot?.destroy) { try { window.__roBot.destroy(); } catch {} }
   const H = window.__roHook || (window.__roHook = { run: null, lobby: null, runs: 0, runSeq: 0, drops: 0, stuck: 0 });
   const BOT = (window.__roBot = {
-    version: '0.9.13',
+    version: '0.9.14',
     get run() { return H.run; },
     get lobby() { return H.lobby; },
     get runs() { return H.runs; }, set runs(v) { H.runs = v; },
@@ -66,6 +66,7 @@
     zenyMin: 50,           // zeny 掉落：單筆金額 ≥ 這個才特地走過去撿（小錢經過時會自動吸）
     mode: 'roam',          // roam 遊走 | idle 原地掛機
     idleKinds: { chest: true, loot: true, magnet: true, meat: false, zeny: false },
+    lowHpPct: 50,          // v0.9.14 低血撤退：HP 低於 N% 時閃怪距離 ×1.5、只撿肉和身邊的東西、往遠離怪群的地方走（0＝關）
     roamRadius: 0,         // v0.9.13 遊走範圍：以這場開場位置為中心，只在這個距離內遊走／撿東西（0＝不限）
     idleRadius: 1200,      // 原地模式：只撿離原點這個距離內的東西
     idleChestRange: 2500,  // 原地模式：寶箱可以走比較遠（錢夠才去）
@@ -381,6 +382,7 @@
   // 以前一律 600～1600 而且偏好遠離怪群 → 開局 72% 時間在長途閒晃，60 秒只殺 50 多隻（原地掛機 5 秒就殺 140 隻）
   // v0.9.13 遊走範圍：中心＝這場開場位置（BOT.rs.roamC）；R＝0 不限
   const roamC = (P) => (BOT.rs.roamC ??= { x: P.x, y: P.y });
+  const lowHpNow = (run) => { const pct = +cfg.lowHpPct || 0, m = run?.stats?.maxHp; return !!(pct && m && run.hp != null && (run.hp / m) * 100 < pct); };
   const inRoam = (P, x, y) => { const R = +cfg.roamRadius || 0; if (!R) return true; const c = roamC(P); return hyp(x - c.x, y - c.y) <= R; };
   function clampRoam(P, x, y) {
     const R = +cfg.roamRadius || 0; if (!R) return [x, y];
@@ -389,7 +391,7 @@
   }
   function newWanderTarget(run, P) {
     const b = run.bounds || { x0: P.x - 1600, x1: P.x + 1600, y0: P.y - 1600, y1: P.y + 1600 };
-    const near = huntingDeity();
+    const near = huntingDeity() && !lowHpNow(run); // v0.9.14 低血時不貼著怪群繞，改往遠離怪群走
     let cx = 0, cy = 0, n = 0;
     for (const e of run.enemies || []) if (!e.dead && hyp(e.x - P.x, e.y - P.y) < (near ? 900 : 600)) { cx += e.x; cy += e.y; n++; }
     const now = Date.now();
@@ -436,11 +438,12 @@
   function cacheEnemies(run, use) {
     EN = [];
     if (!use) return;
+    const lowHp = lowHpNow(run);
     for (const e of run.enemies || []) {
       if (e.dead) continue;
       const boss = e.def?.boss;
       const hunting = e.elite && !boss && huntingDeity(); // 獵神時精英怪是寶箱來源，不要特別怕它
-      EN.push({ x: e.x, y: e.y, R: cfg.dangerR * (boss ? 1.6 : e.elite && !hunting ? 1.25 : 1), w: boss ? cfg.bossMult : e.elite && !hunting ? 1.5 : 1 });
+      EN.push({ x: e.x, y: e.y, R: cfg.dangerR * (boss ? 1.6 : e.elite && !hunting ? 1.25 : 1) * (lowHp ? 1.5 : 1), w: boss ? cfg.bossMult : e.elite && !hunting ? 1.5 : 1 });
     }
   }
   function dangerAt(x, y) {
@@ -461,6 +464,7 @@
     try { canChest = (cfg.lootChest || huntingDeity()) && run.zeny >= run.chestCost(); } catch {}
     const hunt = huntingDeity();
     const lowHp = run.hp != null && run.stats?.maxHp && run.hp / run.stats.maxHp < 0.6;
+    const retreat = lowHpNow(run);
     const cand = [];
     for (const o of run.pickups || []) {
       if (o.dead || o.magnet) continue; // magnet = 已經在飛向角色
@@ -469,6 +473,7 @@
       if (o.kind === 'zeny' && (o.value ?? 0) < effZenyMin()) continue;
       if (hyp(o.x - P.x, o.y - P.y) > 900) continue;
       if (!inRoam(P, o.x, o.y)) continue; // v0.9.13 遊走範圍外的不去撿
+      if (retreat && o.kind !== 'meat' && hyp(o.x - P.x, o.y - P.y) > 250) continue; // v0.9.14 低血撤退：只撿肉和身邊的
       cand.push(o);
     }
     let best = null, bs = 0.5;
@@ -492,7 +497,7 @@
       steer.target = best; steer.targetAt = now;
       return best;
     }
-    if (hunt) { const el = eliteTarget(run, P); if (el && inRoam(P, el.x, el.y)) { steer.target = el; steer.targetAt = now; return el; } }
+    if (hunt && !retreat) { const el = eliteTarget(run, P); if (el && inRoam(P, el.x, el.y)) { steer.target = el; steer.targetAt = now; return el; } }
     if (!cur || !cur.wander || now - steer.targetAt > 12000 || hyp(cur.x - P.x, cur.y - P.y) < 64) newWanderTarget(run, P);
     return steer.target;
   }
@@ -615,12 +620,17 @@
     const goingChest = T?.obj?.kind === 'chest';
     const attractW = nearChest ? 1.6 : goingChest ? (threat > 2 ? 0.8 : 1.2) : threat > 2 ? 0.35 : 1; // 寶箱：就在旁邊衝過去，遠的也不輕易放棄
     const openW = threat > 0.8 ? 0.6 : 0.3;
+    const retreat = lowHpNow(run);
+    // v0.9.14 遊走範圍軟牆：外圈 25% 往外走扣分（越外越重），危險很高時減弱 → 平常在範圍內閃怪，被包圍時仍可往外逃
+    const RR = !idle && +cfg.roamRadius ? +cfg.roamRadius : 0, RC = RR ? roamC(P) : null;
+    const wallW = RR ? 1.6 * (threat > 2.5 ? 0.25 : 1) : 0, d0 = RR ? hyp(P.x - RC.x, P.y - RC.y) : 0;
     let bx = ax, by = ay, best = -Infinity;
     for (const [cx, cy] of [[ax, ay], ...DIRS]) {
       const c = clearance(run, P, cx, cy);
       const step = Math.min(c, 140);
-      let sc = attractW * (cx * ax + cy * ay) - 1.2 * dangerAt(P.x + cx * step, P.y + cy * step)
+      let sc = attractW * (retreat ? 0.5 : 1) * (cx * ax + cy * ay) - 1.2 * dangerAt(P.x + cx * step, P.y + cy * step)
         + openW * (c / 256) + 0.15 * (cx * steer.prev[0] + cy * steer.prev[1]);
+      if (RR) { const d1 = hyp(P.x + cx * step - RC.x, P.y + cy * step - RC.y); if (d1 > d0 && d1 > RR * 0.75) sc -= wallW * Math.min(2, (d1 - RR * 0.75) / (RR * 0.25)); }
       if (c < 40) sc -= 3;          // wall right ahead
       else if (c < 96) sc -= 0.4;   // close to a wall / corner
       if (sc > best) { best = sc; bx = cx; by = cy; }
@@ -630,7 +640,11 @@
     if (!steer.chk || now - steer.chk.t > 800) {
       if (steer.chk && hyp(P.x - steer.chk.x, P.y - steer.chk.y) < 20) {
         let ob = -1;
-        for (const [cx, cy] of DIRS) { const c = clearance(run, P, cx, cy, 320) + Math.random() * 20; if (c > ob) { ob = c; steer.escapeDir = [cx, cy]; } }
+        for (const [cx, cy] of DIRS) {
+          let c = clearance(run, P, cx, cy, 320) + Math.random() * 20;
+          if (RR && threat <= 2.5) { const d1 = hyp(P.x + cx * 140 - RC.x, P.y + cy * 140 - RC.y); if (d1 > d0 && d1 > RR * 0.75) c -= 200; } // v0.9.14 卡住脫困也不往範圍外衝（危險很高時例外）
+          if (c > ob) { ob = c; steer.escapeDir = [cx, cy]; }
+        }
         steer.escapeUntil = now + 700;
         if (T?.wander) steer.target = null;
         steer.path = null;
@@ -1684,25 +1698,33 @@
   }, 50));
   BOT.timers.push(setInterval(render, 500));
 
-  // v0.9.13 遊走範圍框：在遊戲畫面上畫出範圍（world3d.project 把地圖座標換成畫面座標，CSS 像素），只是疊一層 SVG，不碰遊戲
+  // v0.9.13 範圍框：在遊戲畫面上畫出範圍（world3d.project 把地圖座標換成畫面座標，CSS 像素），只是疊一層 SVG，不碰遊戲
+  // 遊走：遊走範圍（藍，中心＝開場位置）；原地掛機：撿東西範圍（藍）＋寶箱範圍（橘），中心＝原點
   function drawRoam() {
     let svg = document.getElementById('rb-roam');
-    const r = BOT.run, R = +cfg.roamRadius || 0, c = BOT.rs?.roamC;
-    const show = R && c && r?.world3d?.project && effMode() === 'roam' && r.state !== 'over' && !cfg.manual;
+    const r = BOT.run, mode = effMode();
+    const rings = [];
+    if (mode === 'roam' && +cfg.roamRadius && BOT.rs?.roamC) rings.push([BOT.rs.roamC, +cfg.roamRadius, '91,141,239']);
+    if (mode === 'idle' && BOT.anchor) { rings.push([BOT.anchor, +cfg.idleRadius || 0, '91,141,239']); if (cfg.idleKinds?.chest) rings.push([BOT.anchor, +cfg.idleChestRange || 0, '240,150,40']); }
+    const show = rings.some((g) => g[1] > 0) && r?.world3d?.project && r.state !== 'over' && !cfg.manual;
     if (!show) { if (svg) svg.style.display = 'none'; return; }
     if (!svg) {
       svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.id = 'rb-roam';
       svg.setAttribute('style', 'position:fixed;left:0;top:0;width:100vw;height:100vh;pointer-events:none;z-index:2147483646');
-      svg.innerHTML = '<polygon fill="rgba(91,141,239,.06)" stroke="rgba(91,141,239,.85)" stroke-width="2" stroke-dasharray="8 6"/><circle r="4" fill="rgba(91,141,239,.9)"/>';
       document.body.appendChild(svg);
     }
     try {
       const cv = r.app?.canvas || r.app?.view || document.querySelector('canvas'), o = cv ? cv.getBoundingClientRect() : { left: 0, top: 0 };
-      const pts = [];
-      for (let i = 0; i < 48; i++) { const a = (i / 48) * Math.PI * 2, q = r.world3d.project(c.x + Math.cos(a) * R, c.y + Math.sin(a) * R); pts.push(`${(o.left + q.x).toFixed(1)},${(o.top + q.y).toFixed(1)}`); }
-      const m = r.world3d.project(c.x, c.y);
-      svg.firstChild.setAttribute('points', pts.join(' '));
-      svg.lastChild.setAttribute('cx', o.left + m.x); svg.lastChild.setAttribute('cy', o.top + m.y);
+      const P = (x, y) => { const q = r.world3d.project(x, y); return [o.left + q.x, o.top + q.y]; };
+      let html = '';
+      for (const [c, R, rgb] of rings) {
+        if (!(R > 0)) continue;
+        const pts = [];
+        for (let i = 0; i < 48; i++) { const a = (i / 48) * Math.PI * 2, [x, y] = P(c.x + Math.cos(a) * R, c.y + Math.sin(a) * R); pts.push(`${x.toFixed(1)},${y.toFixed(1)}`); }
+        html += `<polygon points="${pts.join(' ')}" fill="rgba(${rgb},.05)" stroke="rgba(${rgb},.85)" stroke-width="2" stroke-dasharray="8 6"/>`;
+      }
+      const [mx, my] = P(rings[0][0].x, rings[0][0].y);
+      svg.innerHTML = html + `<circle cx="${mx}" cy="${my}" r="4" fill="rgba(91,141,239,.9)"/>`;
       svg.style.display = '';
     } catch { svg.style.display = 'none'; }
   }
@@ -1900,6 +1922,7 @@
     <div data-show="@roam" style="display:grid">${SEC('遊走細節', `
       <label>遊走範圍 ${NUM('roamRadius', 56, 0, 100)} <span class="hint">以這場開場位置為中心，只在這個距離內走動、撿東西；遊戲畫面上會畫藍色虛線框；0＝不限</span></label>
       <label>閃怪距離 ${NUM('dangerR', 50, 50, 10)}</label>
+      <label>低血撤退 HP &lt; ${NUM('lowHpPct', 40, 0, 5)}% <span class="hint">閃怪距離 ×1.5、只撿肉和身邊的東西、往遠離怪群的地方走；0＝關</span></label>
       ${CHK('lootChest', '錢夠就去開寶箱')}
       <label>zeny 單筆 ≥ ${NUM('zenyMin', 46, 0, 10)} 才特地去撿</label>`)}</div>
     <div class="hint">F8 或標題列的「▶ 自動中／✋ 手動」：bot 全部停止／恢復，設定都不變</div>
@@ -2292,7 +2315,7 @@
            (ph !== 'normal' ? `${ph === 'hunt' ? '🔎 巡邏中' : '🧘 掛機中'}` +
              (skillGoal() ? `  技能 ${skillsReached() ? '✓' : BOT.rs?.skillTimeout ? '逾時' : '…'}` : '') +
              (deityGoal() ? `  神祇 ${huntDone() ? '✓' : BOT.rs?.huntFailed ? '放棄' : '…'}（寶箱 ${r.chestsOpened ?? 0}）` : '') : `模式：${effMode() === 'idle' ? '原地掛機' : '遊走'}`) +
-           (effMode() === 'roam' && +cfg.roamRadius && BOT.rs?.roamC && P ? `  離中心 ${Math.round(hyp(P.x - BOT.rs.roamC.x, P.y - BOT.rs.roamC.y))}/${cfg.roamRadius}` : '') +
+           (lowHpNow(r) ? '  🩸低血撤退' : '') + (effMode() === 'roam' && +cfg.roamRadius && BOT.rs?.roamC && P ? `  離中心 ${Math.round(hyp(P.x - BOT.rs.roamC.x, P.y - BOT.rs.roamC.y))}/${cfg.roamRadius}` : '') +
            (effMode() === 'idle' && BOT.anchor && P ? `  離原點 ${Math.round(hyp(P.x - BOT.anchor.x, P.y - BOT.anchor.y))}${BOT.sweep ? ' 掃圈' : ''}` : '') + '\n'
          : '\n') +
       `${r?.dropsBy ? `? 裝備 ${mysteryOf(r).myst?.[0] ?? 0}・卡 ${mysteryOf(r).myst?.[1] ?? 0}` : `掉落 ${BOT.drops || 0}`}  進關 ${BOT.runs}${cfg.maxRuns ? '/' + cfg.maxRuns : ''}  hook ${BOT.run ? '✓' : '✗'}${BOT.lobby ? '✓' : '✗'}`;
