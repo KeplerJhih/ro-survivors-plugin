@@ -6,7 +6,7 @@
   if (window.__roBot?.destroy) { try { window.__roBot.destroy(); } catch {} }
   const H = window.__roHook || (window.__roHook = { run: null, lobby: null, runs: 0, runSeq: 0, drops: 0, stuck: 0 });
   const BOT = (window.__roBot = {
-    version: '0.9.8',
+    version: '0.9.9',
     get run() { return H.run; },
     get lobby() { return H.lobby; },
     get runs() { return H.runs; }, set runs(v) { H.runs = v; },
@@ -100,7 +100,7 @@
     skillOkTop: 0,         // 命中優先序前 N 名才算滿意（0 = 命中任何一個）
     skillBanish: [],
     skillFocus: [],
-    festRareOnly: false,   // v0.9.8 燈籠節：只打有隱藏王（Evil Snake Lord）的場次，沒有就開場離開重進
+    finalBoss: {},         // v0.9.9 指定最終王：{ 關卡名: [王 id…] }，這場的最終王（MVP／隱藏王）有勾到的才打，沒有就開場離開重進；空＝不管
     skillUpg: [],          // v0.9.7 技能升級項目順序（升級卡強化行的關鍵字，例：目標、冷卻、傷害）
     // 組隊掉落擲骰：off 自己按 / pass 全部放棄 / greed 全部 Greed / need 全部 Need / rule 依規則
     roll: { mode: 'off', needList: [], passList: [], needQ: '傳說', card: 'rule', other: 'greed' },
@@ -124,6 +124,8 @@
     c.perks = { ...clone(DEFAULT_CFG.perks), ...(c.perks || {}) };
     for (const k of ['deity', 'chest', 'skill']) c.perks[k] = { ...DEFAULT_CFG.perks[k], ...(c.perks[k] || {}) };
     c.deityOn = true; c.chestPick = 'smart'; // v0.7 起不再提供這兩個開關
+    c.finalBoss = { ...(c.finalBoss || {}) };
+    if (c.festRareOnly) { c.finalBoss['燈籠節'] = ['dark_snake_lord']; } delete c.festRareOnly; // v0.9.8 →v0.9.9
     // v0.4.9 的「獵取目標」轉成神祇設定
     if (c.chestHunt?.length) { for (const n of c.chestHunt) { if (DEITY_NAMES.includes(n)) c.deity[n] = 'want'; else (c.deityExtra ||= []).push(n); } c.chestHunt = []; }
     return c;
@@ -950,6 +952,19 @@
     if (cfg.huntLeaveMin && (run.time || 0) >= cfg.huntLeaveMin * 60) return `${cfg.huntLeaveMin} 分鐘沒拿到目標`;
     return null;
   }
+  // v0.9.9 王：關卡腳本 run.script.bosses（最後一隻＝MVP），隱藏王 run.script.rare（{id, chance}）由伺服器開場決定 → run.rareId
+  const BOSS_ZH = { bacsojin: '白素貞', dark_snake_lord: '蛇王（Evil Snake Lord）' };
+  const bossName = (id) => BOSS_ZH[id] || String(id).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  const finalBosses = (run) => { const b = run?.script?.bosses || []; const mvp = b.filter((x) => x.id !== run.rareId).at(-1)?.id; return [mvp, run?.rareId].filter(Boolean); };
+  const SB_KEY = 'roBot.stageBosses';
+  const loadSB = () => { try { return JSON.parse(localStorage.getItem(SB_KEY) || '{}'); } catch { return {}; } };
+  function learnBosses(run) {
+    const name = stageOf(run), b = run?.script?.bosses; if (!name || !b?.length || BOT.rs.sbDone) return;
+    BOT.rs.sbDone = true;
+    const mvp = b.filter((x) => x.id !== run.rareId).at(-1), rare = run.script.rare;
+    const sb = loadSB(), e = { mvp: mvp?.id, rare: rare?.id || null, chance: rare?.chance ?? null };
+    if (JSON.stringify(sb[name]) !== JSON.stringify(e)) { sb[name] = e; try { localStorage.setItem(SB_KEY, JSON.stringify(sb)); } catch {} }
+  }
   function leaveRun(why) {
     BOT.leaving = true;
     log('leave run:', why);
@@ -1586,11 +1601,16 @@
           }
         } else { BOT.pausedAt = 0; BOT.resumeDelay = rnd(1000, 2000); }
 
-        // ②.48 v0.9.8 燈籠節只打有隱藏王的場次：有沒有隱藏王是伺服器開場決定的（run.rareId＝dark_snake_lord），
-        // 整場不會變 → 沒有就在開場幾秒（隨機 3～8 秒，不要一進場就秒退）後結束這場，回城重進
-        if (cfg.festRareOnly && on('loop') && st === 'playing' && !BOT.leaving && run.stageId === 'louyang' && !run.rareId) {
-          BOT.rs.rareWait ??= rnd(3, 8);
-          if ((run.time || 0) >= BOT.rs.rareWait) leaveRun('沒有隱藏王（Evil Snake Lord）');
+        // ②.48 v0.9.9 指定最終王：這場的最終王（關卡 MVP，加上伺服器開場決定的隱藏王 run.rareId）整場不會變。
+        // 有勾到其中一隻才打；都沒勾到就在開場幾秒（隨機 3～8 秒，不要一進場就秒退）後結束這場，回城重進
+        if (st === 'playing') learnBosses(run);
+        const fbWant = lines(cfg.finalBoss?.[stageOf(run)]);
+        if (fbWant.length && on('loop') && st === 'playing' && !BOT.leaving) {
+          const fin = finalBosses(run);
+          if (fin.length && !fin.some((b) => fbWant.includes(b))) {
+            BOT.rs.rareWait ??= rnd(3, 8);
+            if ((run.time || 0) >= BOT.rs.rareWait) leaveRun('最終王不是指定的（' + fin.map(bossName).join('、') + '）');
+          }
         }
 
         // ②.5 獵目標失敗 → 放棄這場
@@ -1826,7 +1846,7 @@
     <div class="scope">關卡、難度跟著設定檔；其他共用</div>
     <label>關卡 <select data-k="stage">${STAGES.map((s) => `<option value="${s}">${s === FEST ? '燈籠節（季節活動）' : s}</option>`).join('')}</select></label>
     <div class="hint" data-show="stage=燈籠節">燈籠節從廣場的「節慶主持人」進入；沒有難度可調，打王掉扭蛋（不掉裝備）</div>
-    <div data-show="stage=燈籠節">${CHK('festRareOnly', '只打有隱藏王的場次', '隱藏王 Evil Snake Lord 是伺服器開場決定的；沒有就開場幾秒後離開重進（那場的扭蛋就沒了）')}</div>
+    <div id="rb-fboss"></div>
     ${DIFF.map((d, i) => `<div class="r"><span>${d.name}</span><input type="range" data-k="diff.${i}" min="${d.min}" max="${d.max}" step="0.05"><span id="rb-dv${i}"></span></div>`).join('')}
     <label>打 ${NUM('maxRuns', 44)} 場後停止 <span class="hint">0＝不停</span></label>
     <label>結算後等 ${NUM('reenterDelay', 44, 0, 5)} 秒再進關</label>
@@ -1932,6 +1952,7 @@
       BOT.anchor = null; save(); render(true);
     };
     panel.addEventListener('click', onListClick);
+    panel.addEventListener('change', onFBoss);
     panel.querySelectorAll('.il-add input').forEach((inp) => { inp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); ilAdd(inp.closest('.il')); } }; });
     // 摺疊區塊記住開合（每個瀏覽器）
     panel.querySelectorAll('details.dt').forEach((d) => {
@@ -2093,9 +2114,26 @@
     save(); renderLists(); render();
   }
   const ILIST = (k, ph) => `<div class="il" data-il="${k}"><div class="il-rows"></div><div class="il-add"><input type="text" placeholder="${ph}"><button type="button">＋ 新增</button></div></div>`;
+  // v0.9.9 指定最終王（目前選的關卡；王表要先打過一場這個關卡才知道）
+  function renderFBoss() {
+    const box = panel?.querySelector('#rb-fboss'); if (!box) return;
+    const e = loadSB()[cfg.stage], want = lines(cfg.finalBoss?.[cfg.stage]);
+    const sig = JSON.stringify([cfg.stage, e, want]); if (box.dataset.sig === sig) return; box.dataset.sig = sig;
+    if (!e) { box.innerHTML = '<div class="hint">指定最終王：先打過一場這個關卡，才知道有哪些王</div>'; return; }
+    const opt = [[e.mvp, 'MVP'], ...(e.rare ? [[e.rare, `隱藏王，約 ${Math.round((e.chance || 0) * 1000) / 10}% 的場次出現`]] : [])];
+    box.innerHTML = `<div class="h">只打這些最終王 <span class="hint">都不勾＝每場都打；勾了的話，這場的最終王（含伺服器開場決定的隱藏王）沒有勾到的就開場幾秒後離開重進，那場的掉落就沒了</span></div>`
+      + opt.map(([id, h]) => `<label><input type="checkbox" data-fb="${htmlEsc(id)}"${want.includes(id) ? ' checked' : ''}>${htmlEsc(bossName(id))} <span class="hint">${h}</span></label>`).join('');
+  }
+  function onFBoss(ev) {
+    const id = ev.target?.dataset?.fb; if (id == null) return;
+    const a = lines(cfg.finalBoss[cfg.stage]).filter((x) => x !== id);
+    if (ev.target.checked) a.push(id);
+    cfg.finalBoss = { ...cfg.finalBoss, [cfg.stage]: a };
+    save(); renderFBoss(); render();
+  }
   function render(full) {
     if (!panel) return;
-    renderLists();
+    renderLists(); renderFBoss();
     const g = (id) => panel.querySelector('#' + id);
     const act = document.activeElement;
     g('rb-ver').textContent = 'v' + BOT.version;
@@ -2129,7 +2167,7 @@
     panel.classList.toggle('manual', !!cfg.manual);
     g('rb-manual').textContent = cfg.manual ? '✋ 手動' : '▶ 自動中';
     g('rb-st').textContent = (cfg.manual ? '✋ 手動模式：bot 不操作（按 F8 或標題列「✋ 手動」恢復）\n' : '') + (BOT.loginErr ? `⚠ ${BOT.loginErr}\n` : '') + (BOT.loginWarn ? `⚠ 自動登入找不到角色「${BOT.loginWarn}」，請手動選\n` : '') +
-      `${r ? '關卡中 · ' + r.state + (r.stageId === 'louyang' ? (r.rareId ? ' 🐍隱藏王' : ' 無隱藏王') : '') : visible($('#lobby-ui')) ? '城鎮' + (cfg.loop && H.nextEnterAt > Date.now() ? ` · ${Math.ceil((H.nextEnterAt - Date.now()) / 1000)} 秒後進關` : '') : '—'}` +
+      `${r ? '關卡中 · ' + r.state + (r.script?.rare ? (r.rareId ? ' 🐍隱藏王' : ' 無隱藏王') : '') : visible($('#lobby-ui')) ? '城鎮' + (cfg.loop && H.nextEnterAt > Date.now() ? ` · ${Math.ceil((H.nextEnterAt - Date.now()) / 1000)} 秒後進關` : '') : '—'}` +
       (r ? `  怪 ${BOT.dbg?.enemies ?? '-'}  威脅 ${BOT.dbg?.threat ?? '-'}\n` +
            `HP ${r.hp != null ? Math.round(r.hp) + '/' + Math.round(r.stats?.maxHp ?? 0) : '-'}  zeny ${r.zeny ?? '-'}  卡住 ${BOT.stuck || 0}\n` +
            (ph !== 'normal' ? `${ph === 'hunt' ? '🔎 巡邏中' : '🧘 掛機中'}` +
