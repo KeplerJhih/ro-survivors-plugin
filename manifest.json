@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "RO Survivors Bot",
-  "version": "0.9.14",
+  "version": "0.9.15",
   "description": "RO Survivors 自動遊玩：自動戰鬥、原地掛機、選技能、寶箱策略、循環關卡",
   "permissions": [
     "scripting",

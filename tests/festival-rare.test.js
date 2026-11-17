@@ -2,18 +2,19 @@
 // 關卡王表第一次進場學起來（roBot.stageBosses），面板勾選；舊 festRareOnly 轉換
 const { chromium } = require('playwright');
 const SCRIPT = { bosses: [{ t: 150, id: 'dancing_dragon' }, { t: 720, id: 'spring_rabbit' }, { t: 840, id: 'bacsojin' }], rare: { id: 'dark_snake_lord', t: 846, chance: 0.075 } };
-async function open(b, { rare, prof, stageId = 'louyang', panelOnly = false }) {
+async function open(b, { rare, prof, stageId = 'louyang', panelOnly = false, later = false }) {
   const p = await b.newPage({ viewport: { width: 900, height: 1000 } }); const errs = []; p.on('pageerror', (e) => errs.push(e.message));
   await p.route('https://ro-survivors.com/', (r) => r.fulfill({ contentType: 'text/html; charset=utf-8', body: `<html><head><meta charset="utf-8"></head><body><button id="btn-endrun" onclick="window.__ended=(window.__ended||0)+1">結束這場</button></body></html>` }));
-  await p.addInitScript(([rare, prof, stageId, SCRIPT, panelOnly]) => {
+  await p.addInitScript(([rare, prof, stageId, SCRIPT, panelOnly, later]) => {
     localStorage.setItem('roBot.cfg', JSON.stringify({ fight: false, pick: true, loop: true, v: 3, tab: 'stage', activeProfile: 'A', profiles: { A: { stage: '燈籠節', fbWait: { min: 3, max: 5 }, ...prof } } }));
     if (prof.__skips != null) localStorage.setItem('roBot.fbSkips', String(prof.__skips));
     const bosses = [...SCRIPT.bosses, ...(rare ? [{ t: 1e9, id: 'dark_snake_lord' }] : [])];
     const run = { state: 'playing', stageId, script: { ...SCRIPT, bosses }, rareId: rare ? 'dark_snake_lord' : null, time: 1, level: 1, kills: 0, zeny: 0, chestCost: () => 30, chestsOpened: 0, player: { x: 500, y: 500 }, pickups: [], touchMove: { x: 0, y: 0 }, bounds: { x0: 0, x1: 3000, y0: 0, y1: 3000 },
       enemies: [], weapons: [], classDef: { id: 'acolyte' }, runItems: { slots: new Map() }, runItemName: (s, i) => i, perksLeft: {}, stats: { maxHp: 100 }, hp: 100 };
+    if (later) run.rareAsk = async () => false;
     window.__roHook = { run: panelOnly ? null : run, lobby: null, runs: 1, runSeq: 1, drops: 0, stuck: 0 };
     setInterval(() => { run.time += 1; }, 200);
-  }, [rare, prof, stageId, SCRIPT, panelOnly]);
+  }, [rare, prof, stageId, SCRIPT, panelOnly, later]);
   await p.goto('https://ro-survivors.com/');
   await p.addScriptTag({ path: require('path').join(__dirname, '..', 'bot.js') });
   await p.waitForTimeout(3500);
@@ -38,6 +39,9 @@ async function open(b, { rare, prof, stageId = 'louyang', panelOnly = false }) {
   ok(/連續離開 10 次，這場照打/.test(await p.evaluate(() => document.querySelector('#rb-st').innerText)), '狀態列顯示照打原因'); await p.close();
   ({ p } = await open(b, { rare: false, prof: { ...ONLY_SNAKE, fbWait: { min: 40, max: 40 } } }));
   ok(await ended(p) === 0 && /最終王不符，\d+ 秒後離開/.test(await p.evaluate(() => document.querySelector('#rb-st').innerText)), '等待中：還沒到秒數不離開，狀態列倒數'); await p.close();
+  ({ p } = await open(b, { rare: false, prof: ONLY_SNAKE, later: true }));
+  ok(await ended(p) === 0 && /打倒白素貞後才決定（7\.5%）/.test(await p.evaluate(() => document.querySelector('#rb-st').innerText)), 'v0.9.15 隱藏王延後決定（rareAsk）→ 只勾蛇王也照打，狀態列說明');
+  await p.close();
   ({ p } = await open(b, { rare: true, prof: ONLY_SNAKE }));
   ok(await ended(p) === 0, '只勾蛇王、有隱藏王 → 打'); await p.close();
   ({ p } = await open(b, { rare: false, prof: BOTH }));

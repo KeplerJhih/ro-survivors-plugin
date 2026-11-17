@@ -6,7 +6,7 @@
   if (window.__roBot?.destroy) { try { window.__roBot.destroy(); } catch {} }
   const H = window.__roHook || (window.__roHook = { run: null, lobby: null, runs: 0, runSeq: 0, drops: 0, stuck: 0 });
   const BOT = (window.__roBot = {
-    version: '0.9.14',
+    version: '0.9.15',
     get run() { return H.run; },
     get lobby() { return H.lobby; },
     get runs() { return H.runs; }, set runs(v) { H.runs = v; },
@@ -993,7 +993,10 @@
   // v0.9.9 王：關卡腳本 run.script.bosses（最後一隻＝MVP），隱藏王 run.script.rare（{id, chance}）由伺服器開場決定 → run.rareId
   const BOSS_ZH = { bacsojin: '白素貞', dark_snake_lord: '蛇王（Evil Snake Lord）' };
   const bossName = (id) => BOSS_ZH[id] || String(id).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-  const finalBosses = (run) => { const b = run?.script?.bosses || []; const mvp = b.filter((x) => x.id !== run.rareId).at(-1)?.id; return [mvp, run?.rareId].filter(Boolean); };
+  // v0.9.15 遊戲 2026-11-17 Quick Festival patch：隱藏王改成「打倒 MVP 時才問伺服器」（run.rareAsk → POST /rare），開場不知道
+  // → 有 rareAsk 但還沒 rareId 時，隱藏王算「可能出現」，勾了隱藏王的場次照打（以前會每場開場就離開）
+  const rareLater = (run) => !!(run?.rareAsk && !run.rareId && run.script?.rare?.id);
+  const finalBosses = (run) => { const b = run?.script?.bosses || []; const mvp = b.filter((x) => x.id !== run.rareId).at(-1)?.id; return [mvp, run?.rareId || (rareLater(run) ? run.script.rare.id : null)].filter(Boolean); };
   const SB_KEY = 'roBot.stageBosses';
   const fbSkips = () => +localStorage.getItem('roBot.fbSkips') || 0;
   const setFbSkips = (n) => { try { localStorage.setItem('roBot.fbSkips', String(n)); } catch {} };
@@ -2309,7 +2312,7 @@
     panel.classList.toggle('manual', !!cfg.manual);
     g('rb-manual').textContent = cfg.manual ? '✋ 手動' : '▶ 自動中';
     g('rb-st').textContent = (cfg.manual ? '✋ 手動模式：bot 不操作（按 F8 或標題列「✋ 手動」恢復）\n' : '') + (BOT.loginErr ? `⚠ ${BOT.loginErr}\n` : '') + (BOT.loginWarn ? `⚠ 自動登入找不到角色「${BOT.loginWarn}」，請手動選\n` : '') +
-      `${r ? '關卡中 · ' + r.state + (r.script?.rare ? (r.rareId ? ' 🐍隱藏王' : ' 無隱藏王') : '') + (BOT.rs?.fbLeaveAt != null && !BOT.rs.fbPlay ? `（最終王不符，${Math.max(0, Math.ceil(BOT.rs.fbLeaveAt - (r.time || 0)))} 秒後離開，連續 ${fbSkips()} 次）` : BOT.rs?.fbPlay ? `（${BOT.rs.fbPlay}）` : '') : visible($('#lobby-ui')) ? '城鎮' + (cfg.loop && H.nextEnterAt > Date.now() ? ` · ${Math.ceil((H.nextEnterAt - Date.now()) / 1000)} 秒後進關` : '') : '—'}` +
+      `${r ? '關卡中 · ' + r.state + (r.script?.rare ? (r.rareId ? ' 🐍隱藏王' : rareLater(r) ? ` 隱藏王：打倒${bossName(r.script.bosses?.filter((x) => x.id !== r.script.rare.id).at(-1)?.id)}後才決定（${Math.round((r.script.rare.chance || 0) * 1000) / 10}%）` : ' 無隱藏王') : '') + (BOT.rs?.fbLeaveAt != null && !BOT.rs.fbPlay ? `（最終王不符，${Math.max(0, Math.ceil(BOT.rs.fbLeaveAt - (r.time || 0)))} 秒後離開，連續 ${fbSkips()} 次）` : BOT.rs?.fbPlay ? `（${BOT.rs.fbPlay}）` : '') : visible($('#lobby-ui')) ? '城鎮' + (cfg.loop && H.nextEnterAt > Date.now() ? ` · ${Math.ceil((H.nextEnterAt - Date.now()) / 1000)} 秒後進關` : '') : '—'}` +
       (r ? `  怪 ${BOT.dbg?.enemies ?? '-'}  威脅 ${BOT.dbg?.threat ?? '-'}\n` +
            `HP ${r.hp != null ? Math.round(r.hp) + '/' + Math.round(r.stats?.maxHp ?? 0) : '-'}  zeny ${r.zeny ?? '-'}  卡住 ${BOT.stuck || 0}\n` +
            (ph !== 'normal' ? `${ph === 'hunt' ? '🔎 巡邏中' : '🧘 掛機中'}` +
