@@ -6,7 +6,7 @@
   if (window.__roBot?.destroy) { try { window.__roBot.destroy(); } catch {} }
   const H = window.__roHook || (window.__roHook = { run: null, lobby: null, runs: 0, runSeq: 0, drops: 0, stuck: 0 });
   const BOT = (window.__roBot = {
-    version: '0.9.9',
+    version: '0.9.10',
     get run() { return H.run; },
     get lobby() { return H.lobby; },
     get runs() { return H.runs; }, set runs(v) { H.runs = v; },
@@ -100,6 +100,8 @@
     skillOkTop: 0,         // 命中優先序前 N 名才算滿意（0 = 命中任何一個）
     skillBanish: [],
     skillFocus: [],
+    fbWait: { min: 20, max: 90 }, // v0.9.10 最終王不符時，在場內照常打隨機 min～max 秒（遊戲時間）再離開
+    fbMaxSkip: 10,         // v0.9.10 連續因最終王不符離開 N 次後，下一場照打（0＝不限）
     finalBoss: {},         // v0.9.9 指定最終王：{ 關卡名: [王 id…] }，這場的最終王（MVP／隱藏王）有勾到的才打，沒有就開場離開重進；空＝不管
     skillUpg: [],          // v0.9.7 技能升級項目順序（升級卡強化行的關鍵字，例：目標、冷卻、傷害）
     // 組隊掉落擲骰：off 自己按 / pass 全部放棄 / greed 全部 Greed / need 全部 Need / rule 依規則
@@ -125,6 +127,7 @@
     for (const k of ['deity', 'chest', 'skill']) c.perks[k] = { ...DEFAULT_CFG.perks[k], ...(c.perks[k] || {}) };
     c.deityOn = true; c.chestPick = 'smart'; // v0.7 起不再提供這兩個開關
     c.finalBoss = { ...(c.finalBoss || {}) };
+    c.fbWait = { ...DEFAULT_CFG.fbWait, ...(c.fbWait || {}) };
     if (c.festRareOnly) { c.finalBoss['燈籠節'] = ['dark_snake_lord']; } delete c.festRareOnly; // v0.9.8 →v0.9.9
     // v0.4.9 的「獵取目標」轉成神祇設定
     if (c.chestHunt?.length) { for (const n of c.chestHunt) { if (DEITY_NAMES.includes(n)) c.deity[n] = 'want'; else (c.deityExtra ||= []).push(n); } c.chestHunt = []; }
@@ -957,6 +960,8 @@
   const bossName = (id) => BOSS_ZH[id] || String(id).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   const finalBosses = (run) => { const b = run?.script?.bosses || []; const mvp = b.filter((x) => x.id !== run.rareId).at(-1)?.id; return [mvp, run?.rareId].filter(Boolean); };
   const SB_KEY = 'roBot.stageBosses';
+  const fbSkips = () => +localStorage.getItem('roBot.fbSkips') || 0;
+  const setFbSkips = (n) => { try { localStorage.setItem('roBot.fbSkips', String(n)); } catch {} };
   const loadSB = () => { try { return JSON.parse(localStorage.getItem(SB_KEY) || '{}'); } catch { return {}; } };
   function learnBosses(run) {
     const name = stageOf(run), b = run?.script?.bosses; if (!name || !b?.length || BOT.rs.sbDone) return;
@@ -1604,13 +1609,19 @@
         // ②.48 v0.9.9 指定最終王：這場的最終王（關卡 MVP，加上伺服器開場決定的隱藏王 run.rareId）整場不會變。
         // 有勾到其中一隻才打；都沒勾到就在開場幾秒（隨機 3～8 秒，不要一進場就秒退）後結束這場，回城重進
         if (st === 'playing') learnBosses(run);
+        // v0.9.10 在場內照常打隨機 fbWait.min～max 秒再離開；連續離開 fbMaxSkip 次後下一場照打（次數存 localStorage，重新整理也算）
         const fbWant = lines(cfg.finalBoss?.[stageOf(run)]);
-        if (fbWant.length && on('loop') && st === 'playing' && !BOT.leaving) {
+        if (fbWant.length && on('loop') && st === 'playing' && !BOT.leaving && !BOT.rs.fbPlay) {
           const fin = finalBosses(run);
           if (fin.length && !fin.some((b) => fbWant.includes(b))) {
-            BOT.rs.rareWait ??= rnd(3, 8);
-            if ((run.time || 0) >= BOT.rs.rareWait) leaveRun('最終王不是指定的（' + fin.map(bossName).join('、') + '）');
-          }
+            const n = fbSkips();
+            if (cfg.fbMaxSkip && n >= cfg.fbMaxSkip) { BOT.rs.fbPlay = `連續離開 ${n} 次，這場照打`; setFbSkips(0); log('最終王不符，但' + BOT.rs.fbPlay); }
+            else {
+              const lo = Math.max(0, +cfg.fbWait.min || 0), hi = Math.max(lo, +cfg.fbWait.max || 0);
+              BOT.rs.fbLeaveAt ??= Math.round(rnd(lo, hi));
+              if ((run.time || 0) >= BOT.rs.fbLeaveAt) { setFbSkips(n + 1); leaveRun(`最終王不是指定的（${fin.map(bossName).join('、')}），連續第 ${n + 1} 次`); }
+            }
+          } else if (fin.length) { BOT.rs.fbPlay = '最終王符合'; setFbSkips(0); }
         }
 
         // ②.5 獵目標失敗 → 放棄這場
@@ -1847,6 +1858,11 @@
     <label>關卡 <select data-k="stage">${STAGES.map((s) => `<option value="${s}">${s === FEST ? '燈籠節（季節活動）' : s}</option>`).join('')}</select></label>
     <div class="hint" data-show="stage=燈籠節">燈籠節從廣場的「節慶主持人」進入；沒有難度可調，打王掉扭蛋（不掉裝備）</div>
     <div id="rb-fboss"></div>
+    <div id="rb-fbopt" style="display:none">
+      <div class="hint">沒遇到勾選的最終王時</div>
+      <label>在場內照常打 ${NUM('fbWait.min', 44)} ～ ${NUM('fbWait.max', 44)} 秒後離開 <span class="hint">隨機；回城後照「結算後等幾秒再進關」重進</span></label>
+      <label>連續離開 ${NUM('fbMaxSkip', 38)} 次後，下一場照打 <span class="hint">0＝不限</span></label>
+    </div>
     ${DIFF.map((d, i) => `<div class="r"><span>${d.name}</span><input type="range" data-k="diff.${i}" min="${d.min}" max="${d.max}" step="0.05"><span id="rb-dv${i}"></span></div>`).join('')}
     <label>打 ${NUM('maxRuns', 44)} 場後停止 <span class="hint">0＝不停</span></label>
     <label>結算後等 ${NUM('reenterDelay', 44, 0, 5)} 秒再進關</label>
@@ -2117,16 +2133,19 @@
   // v0.9.9 指定最終王（目前選的關卡；王表要先打過一場這個關卡才知道）
   function renderFBoss() {
     const box = panel?.querySelector('#rb-fboss'); if (!box) return;
-    const e = loadSB()[cfg.stage], want = lines(cfg.finalBoss?.[cfg.stage]);
+    // v0.9.10 預設（這個關卡還沒設定過）＝全部勾（白素貞＋蛇王都打＝每場都打）
+    const e = loadSB()[cfg.stage], want = fbDisplay(e);
+    const ob = panel.querySelector('#rb-fbopt'); if (ob) ob.style.display = e ? '' : 'none';
     const sig = JSON.stringify([cfg.stage, e, want]); if (box.dataset.sig === sig) return; box.dataset.sig = sig;
     if (!e) { box.innerHTML = '<div class="hint">指定最終王：先打過一場這個關卡，才知道有哪些王</div>'; return; }
     const opt = [[e.mvp, 'MVP'], ...(e.rare ? [[e.rare, `隱藏王，約 ${Math.round((e.chance || 0) * 1000) / 10}% 的場次出現`]] : [])];
-    box.innerHTML = `<div class="h">只打這些最終王 <span class="hint">都不勾＝每場都打；勾了的話，這場的最終王（含伺服器開場決定的隱藏王）沒有勾到的就開場幾秒後離開重進，那場的掉落就沒了</span></div>`
+    box.innerHTML = `<div class="h">只打這些最終王 <span class="hint">預設全勾＝每場都打；這場的最終王（含伺服器開場決定的隱藏王）都沒勾到時，照下面的秒數離開重進，那場的掉落就沒了</span></div>`
       + opt.map(([id, h]) => `<label><input type="checkbox" data-fb="${htmlEsc(id)}"${want.includes(id) ? ' checked' : ''}>${htmlEsc(bossName(id))} <span class="hint">${h}</span></label>`).join('');
   }
+  const fbDisplay = (e) => (cfg.finalBoss?.[cfg.stage] ? lines(cfg.finalBoss[cfg.stage]) : e ? [e.mvp, e.rare].filter(Boolean) : []);
   function onFBoss(ev) {
     const id = ev.target?.dataset?.fb; if (id == null) return;
-    const a = lines(cfg.finalBoss[cfg.stage]).filter((x) => x !== id);
+    const a = fbDisplay(loadSB()[cfg.stage]).filter((x) => x !== id);
     if (ev.target.checked) a.push(id);
     cfg.finalBoss = { ...cfg.finalBoss, [cfg.stage]: a };
     save(); renderFBoss(); render();
@@ -2167,7 +2186,7 @@
     panel.classList.toggle('manual', !!cfg.manual);
     g('rb-manual').textContent = cfg.manual ? '✋ 手動' : '▶ 自動中';
     g('rb-st').textContent = (cfg.manual ? '✋ 手動模式：bot 不操作（按 F8 或標題列「✋ 手動」恢復）\n' : '') + (BOT.loginErr ? `⚠ ${BOT.loginErr}\n` : '') + (BOT.loginWarn ? `⚠ 自動登入找不到角色「${BOT.loginWarn}」，請手動選\n` : '') +
-      `${r ? '關卡中 · ' + r.state + (r.script?.rare ? (r.rareId ? ' 🐍隱藏王' : ' 無隱藏王') : '') : visible($('#lobby-ui')) ? '城鎮' + (cfg.loop && H.nextEnterAt > Date.now() ? ` · ${Math.ceil((H.nextEnterAt - Date.now()) / 1000)} 秒後進關` : '') : '—'}` +
+      `${r ? '關卡中 · ' + r.state + (r.script?.rare ? (r.rareId ? ' 🐍隱藏王' : ' 無隱藏王') : '') + (BOT.rs?.fbLeaveAt != null && !BOT.rs.fbPlay ? `（最終王不符，${Math.max(0, Math.ceil(BOT.rs.fbLeaveAt - (r.time || 0)))} 秒後離開，連續 ${fbSkips()} 次）` : BOT.rs?.fbPlay ? `（${BOT.rs.fbPlay}）` : '') : visible($('#lobby-ui')) ? '城鎮' + (cfg.loop && H.nextEnterAt > Date.now() ? ` · ${Math.ceil((H.nextEnterAt - Date.now()) / 1000)} 秒後進關` : '') : '—'}` +
       (r ? `  怪 ${BOT.dbg?.enemies ?? '-'}  威脅 ${BOT.dbg?.threat ?? '-'}\n` +
            `HP ${r.hp != null ? Math.round(r.hp) + '/' + Math.round(r.stats?.maxHp ?? 0) : '-'}  zeny ${r.zeny ?? '-'}  卡住 ${BOT.stuck || 0}\n` +
            (ph !== 'normal' ? `${ph === 'hunt' ? '🔎 巡邏中' : '🧘 掛機中'}` +
