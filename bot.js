@@ -6,7 +6,7 @@
   if (window.__roBot?.destroy) { try { window.__roBot.destroy(); } catch {} }
   const H = window.__roHook || (window.__roHook = { run: null, lobby: null, runs: 0, runSeq: 0, drops: 0, stuck: 0 });
   const BOT = (window.__roBot = {
-    version: '0.9.15',
+    version: '0.9.16',
     get run() { return H.run; },
     get lobby() { return H.lobby; },
     get runs() { return H.runs; }, set runs(v) { H.runs = v; },
@@ -1755,7 +1755,7 @@
   }
   function showOk(expr) {
     const neg = expr.startsWith('!'); if (neg) expr = expr.slice(1);
-    if (expr === '@idle') return (cfg.gate.on || cfg.mode === 'idle') !== neg; // 先巡邏再掛機也會原地掛機
+    if (expr === '@idle') return ((cfg.gate.on && cfg.gate.after !== 'keep') || cfg.mode === 'idle') !== neg; // 先巡邏再掛機也會原地掛機（v0.9.16 之後一直遊走的除外）
     if (expr === '@roam') return (cfg.gate.on || cfg.mode === 'roam') !== neg; // 巡邏＝遊走
     const [p, v] = expr.split('=');
     const val = getP(p);
@@ -1893,10 +1893,11 @@
     <div class="box">
       <label class="h">玩法 <select id="rb-flow">
         <option value="gate">先巡邏，再原地掛機</option>
+        <option value="gate_roam">先巡邏（拿神祇），之後一直遊走</option>
         <option value="idle">一開始就原地掛機</option>
         <option value="roam">一直遊走</option></select></label>
       <div data-show="gate.on" style="display:grid;gap:5px">
-        <div class="hint">巡邏＝遊走打怪撿東西。下列勾的都做到，才切換原地掛機：</div>
+        <div class="hint">巡邏＝遊走打怪撿東西。下列勾的都做到，才切換<span data-show="!gate.after=keep">原地掛機</span><span data-show="gate.after=keep">一般遊走（沒有補血的職業用，例：法師）</span>：</div>
         ${CHK('gate.deity', '拿到🎯神祇', '目標和放棄條件在「寶箱」頁')}
         ${CHK('gate.skillOn', '學到技能優先序')}
         <div data-show="gate.skillOn" style="display:grid;gap:4px;padding-left:18px">
@@ -2043,7 +2044,7 @@
     panel.querySelectorAll('[data-list]').forEach((el) => { el.oninput = () => { setP(el.dataset.list, parseList(el.value)); save(); }; });
     g('rb-flow').onchange = (e) => {
       const v = e.target.value;
-      if (v === 'gate') { cfg.gate.on = true; cfg.gate.after = 'idle'; if (!cfg.gate.skillOn && !cfg.gate.deity) cfg.gate.skillOn = true; }
+      if (v === 'gate' || v === 'gate_roam') { cfg.gate.on = true; cfg.gate.after = v === 'gate' ? 'idle' : 'keep'; if (v === 'gate_roam') cfg.mode = 'roam'; if (!cfg.gate.skillOn && !cfg.gate.deity) cfg.gate.skillOn = true; } // v0.9.16 先巡邏再一直遊走
       else { cfg.gate.on = false; cfg.mode = v; }
       BOT.anchor = null; save(); render(true);
     };
@@ -2301,7 +2302,7 @@
     });
     if (full) panel.querySelectorAll('[data-list]').forEach((el) => { if (el !== act) el.value = listVal(getP(el.dataset.list)); });
     panel.querySelectorAll('[data-show]').forEach((el) => { el.style.display = showOk(el.dataset.show) ? '' : 'none'; });
-    if (g('rb-flow') !== act) g('rb-flow').value = cfg.gate.on ? 'gate' : cfg.mode;
+    if (g('rb-flow') !== act) g('rb-flow').value = cfg.gate.on ? (cfg.gate.after === 'keep' ? 'gate_roam' : 'gate') : cfg.mode;
     DIFF.forEach((_, i) => { g('rb-dv' + i).textContent = Math.round(cfg.diff[i] * 100) + '%'; });
     { const l = gateSkills(); g('rb-gskl').textContent = l.length ? `＝${l.join('、')}` : '技能分頁還沒有優先序'; }
 
